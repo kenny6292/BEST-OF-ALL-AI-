@@ -22,6 +22,14 @@ const configuredProviders = () => Object.values(providers).filter((provider) => 
 export const getProviderStatus = () =>
   Object.fromEntries(Object.entries(providers).map(([name, provider]) => [name, provider.configured()]));
 
+export const getModelCatalog = () =>
+  Object.entries(providers).map(([provider, adapter]) => ({
+    provider,
+    configured: adapter.configured(),
+    model: adapter.defaultModel(),
+    selector: `${provider}:${adapter.defaultModel()}`,
+  }));
+
 const parseModelSelector = (value?: string) => {
   if (!value || value === "auto") return { provider: null, model: null };
   const [provider, ...parts] = value.split(":");

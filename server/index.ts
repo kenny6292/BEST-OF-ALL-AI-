@@ -3,6 +3,7 @@ import { createReadStream, existsSync, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getProviderStatus, getModelCatalog, generateWithProvider, providers } from "./provider-router.js";
+import { researchConfigured, runResearch } from "./research.js";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const port = Number(process.env.PORT || 8787);
@@ -58,12 +59,29 @@ const server = createServer(async (req, res) => {
       ok: true,
       service: "best-of-all-ai-api",
       providers: getProviderStatus(),
+      research: researchConfigured(),
       timestamp: new Date().toISOString(),
     });
   }
 
   if (url.pathname === "/api/models" && req.method === "GET") {
     return sendJson(res, 200, { models: getModelCatalog() });
+  }
+
+  if (url.pathname === "/api/research/status" && req.method === "GET") {
+    return sendJson(res, 200, { configured: researchConfigured() });
+  }
+
+  if (url.pathname === "/api/research" && req.method === "POST") {
+    try {
+      const body = await readJson(req);
+      const message = body.message?.trim();
+      if (!message) return sendJson(res, 400, { error: "Research query is required." });
+      const result = await runResearch(message, body.model || "auto");
+      return sendJson(res, 200, result);
+    } catch (error) {
+      return sendJson(res, 502, { error: error instanceof Error ? error.message : "Research request failed." });
+    }
   }
 
   if (url.pathname === "/api/compare" && req.method === "POST") {

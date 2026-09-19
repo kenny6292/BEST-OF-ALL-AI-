@@ -21,6 +21,12 @@ export type Database = {
         Update: { content?: string };
         Relationships: [];
       };
+      files: {
+        Row: { id: string; user_id: string; name: string; storage_path: string; mime_type: string; size_bytes: number; created_at: string };
+        Insert: { id?: string; user_id: string; name: string; storage_path: string; mime_type?: string; size_bytes?: number; created_at?: string };
+        Update: { name?: string; mime_type?: string; size_bytes?: number };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

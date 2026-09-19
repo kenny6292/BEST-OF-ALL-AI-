@@ -33,3 +33,10 @@ For a production-style build, run `npm run build` and start the compiled server 
 Never commit API keys or secrets. Use deployment environment variables. Do not put provider secrets in React code or variables prefixed with `VITE_`.
 
 Provider availability must reflect actual configured integrations; the UI must never fake unavailable functionality.
+
+
+## Web research
+
+The Research mode uses the Brave Search API through the server-side Node API. Search requests return live web results with titles, URLs and snippets, and the configured AI provider synthesizes the results with `[Source N]` citations. The search credential is never exposed to the browser.
+
+Set `BRAVE_SEARCH_API_KEY` in the server environment to enable Research mode. `WEB_SEARCH_API_KEY` remains supported as a fallback alias. The Brave Web Search API supports structured web results, freshness controls and result pagination; this project currently requests eight web results per research query.

@@ -22,7 +22,7 @@ const nav: NavItem[] = [
   { label: "Library", icon: Library },
 ];
 
-async function runAgents() { setAgentRunning(true); try { const s=await supabase.auth.getSession(); const t=s.data.session?.access_token; if(!t){setAgentResults([{task:"Authentication",error:"Sign in to run agents."}]);return;} const r=await fetch("/api/agents/run",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+t},body:JSON.stringify({tasks:agentTasks})}); const d=await r.json(); if(!r.ok) throw new Error(d.error||"Agent run failed."); setAgentResults(d.results||[]); } catch(e:any){setAgentResults([{task:"Agent run",error:e?.message||"Agent run failed."}]);} finally {setAgentRunning(false);} }\nfunction formatBytes(bytes: number) { if (!bytes) return "0 B"; const units = ["B", "KB", "MB", "GB", "TB"]; const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1); return (bytes / Math.pow(1024, i)).toFixed(i ? 1 : 0) + " " + units[i]; }\n\nfunction App() {
+async function runAdvancedResearch() { setResearchRunning(true); try { const s=await supabase.auth.getSession(); const t=s.data.session?.access_token; if(!t){setResearchSources([{title:"Authentication",url:"",snippet:"Sign in to run research."}]);return;} const r=await fetch("/api/research/advanced?q="+encodeURIComponent(prompt),{headers:{Authorization:"Bearer "+t}}); const d=await r.json(); if(!r.ok) throw new Error(d.error||"Research failed."); setResearchSources(d.sources||[]); } catch(e:any){setResearchSources([{title:"Research error",url:"",snippet:e?.message||"Research failed."}]);} finally {setResearchRunning(false);} }\n\nasync function runAgents() { setAgentRunning(true); try { const s=await supabase.auth.getSession(); const t=s.data.session?.access_token; if(!t){setAgentResults([{task:"Authentication",error:"Sign in to run agents."}]);return;} const r=await fetch("/api/agents/run",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+t},body:JSON.stringify({tasks:agentTasks})}); const d=await r.json(); if(!r.ok) throw new Error(d.error||"Agent run failed."); setAgentResults(d.results||[]); } catch(e:any){setAgentResults([{task:"Agent run",error:e?.message||"Agent run failed."}]);} finally {setAgentRunning(false);} }\nfunction formatBytes(bytes: number) { if (!bytes) return "0 B"; const units = ["B", "KB", "MB", "GB", "TB"]; const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1); return (bytes / Math.pow(1024, i)).toFixed(i ? 1 : 0) + " " + units[i]; }\n\nfunction App() {
   const [sidebar, setSidebar] = useState(true);
   const [active, setActive] = useState("AI Chat");
   const [prompt, setPrompt] = useState("");
@@ -31,7 +31,7 @@ async function runAgents() { setAgentRunning(true); try { const s=await supabase
   const [loading, setLoading] = useState(false); const [agentTasks,setAgentTasks]=useState<string[]>(["Research and summarize the key considerations for my task."]); const [agentResults,setAgentResults]=useState<any[]>([]); const [agentRunning,setAgentRunning]=useState(false);
   const [apiReady, setApiReady] = useState<boolean | null>(null);
   const [researchReady, setResearchReady] = useState<boolean | null>(null);
-  const [researchSources, setResearchSources] = useState<Array<{ title: string; url: string; snippet: string }>>([]);
+  const [researchSources, setResearchSources] = useState<Array<{ title: string; url: string; snippet: string }>>([]);\n  const [researchRunning,setResearchRunning]=useState(false);
   const [selectedModel, setSelectedModel] = useState("auto");
   const [modelCatalog, setModelCatalog] = useState<Array<{ provider: string; configured: boolean; model: string; selector: string }>>([]);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -337,7 +337,7 @@ async function runAgents() { setAgentRunning(true); try { const s=await supabase
                   <input ref={fileInputRef} className="file-input" type="file" accept=".pdf,.docx,.txt,.md,.csv,.json,.xml,.js,.ts,.tsx,.jsx,.css,.html,.log,text/*,application/json,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFileUpload} />
                   <button className="tool-btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}><Paperclip size={17} /> {uploading ? "Uploading…" : "Attach"}</button>
                   <button className="tool-btn"><Mic size={17} /> Voice</button>
-                  <button className="tool-btn" onClick={() => void compareModels()} disabled={!prompt.trim() || comparing}><Sparkles size={17} /> Compare</button>
+                  <button className="tool-btn" onClick={() => void compareModels()} disabled={!prompt.trim() || comparing}><Sparkles size={17} /> Compare</button><button className="tool-btn" onClick={() => void runAdvancedResearch()} disabled={!prompt.trim() || researchRunning}><Search size={17} /> {researchRunning?"Researching…":"Fast Research"}</button>
                 </div>
                 <button className="send-btn" disabled={!prompt.trim() || loading} onClick={() => void sendMessage()} aria-label="Send"><Send size={17} /></button>
               </div>

@@ -22,7 +22,7 @@ const nav: NavItem[] = [
   { label: "Library", icon: Library },
 ];
 
-function App() {
+function formatBytes(bytes: number) { if (!bytes) return "0 B"; const units = ["B", "KB", "MB", "GB", "TB"]; const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1); return (bytes / Math.pow(1024, i)).toFixed(i ? 1 : 0) + " " + units[i]; }\n\nfunction App() {
   const [sidebar, setSidebar] = useState(true);
   const [active, setActive] = useState("AI Chat");
   const [prompt, setPrompt] = useState("");
@@ -39,7 +39,7 @@ function App() {
   const [comparing, setComparing] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [uploading, setUploading] = useState(false);\n  const [documents, setDocuments] = useState<Array<{ id: string; name: string; mimeType: string; sizeBytes: number; createdAt: string }>>([]);\n  const [libraryLoading, setLibraryLoading] = useState(false);\n  const [libraryError, setLibraryError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadWorkspace = async (userId: string) => {
@@ -93,7 +93,7 @@ function App() {
     supabase.auth.getSession().then(({ data }) => {
       const user = data.session?.user;
       setUserEmail(user?.email ?? null);
-      if (user) void loadWorkspace(user.id);
+      if (user) { void loadWorkspace(user.id); void loadDocuments(); }
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -109,6 +109,38 @@ function App() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
+  const loadDocuments = async () => {
+    const session = supabase ? (await supabase.auth.getSession()).data.session : null;
+    if (!session?.access_token) { setDocuments([]); return; }
+    setLibraryLoading(true); setLibraryError(null);
+    try {
+      const response = await fetch("/api/documents", { headers: { Authorization: "Bearer " + session.access_token } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Could not load your document library.");
+      setDocuments(data.files ?? []);
+    } catch (error) { setLibraryError(error instanceof Error ? error.message : "Could not load your document library."); }
+    finally { setLibraryLoading(false); }
+  };
+  const downloadDocument = async (id: string) => {
+    const session = supabase ? (await supabase.auth.getSession()).data.session : null;
+    if (!session?.access_token) { setAuthOpen(true); return; }
+    try {
+      const response = await fetch("/api/documents/" + id + "/download", { headers: { Authorization: "Bearer " + session.access_token } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Download failed.");
+      window.open(data.url, "_blank", "noopener,noreferrer");
+    } catch (error) { setLibraryError(error instanceof Error ? error.message : "Download failed."); }
+  };
+  const deleteDocument = async (id: string) => {
+    const session = supabase ? (await supabase.auth.getSession()).data.session : null;
+    if (!session?.access_token) { setAuthOpen(true); return; }
+    try {
+      const response = await fetch("/api/documents/" + id, { method: "DELETE", headers: { Authorization: "Bearer " + session.access_token } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Delete failed.");
+      setDocuments(items => items.filter(item => item.id !== id));
+    } catch (error) { setLibraryError(error instanceof Error ? error.message : "Delete failed."); }
+  };
   const sendMessage = async (text = prompt) => {
     const message = text.trim(); if (!message || loading) return;
     setPrompt(""); setMessages((items) => [...items, { role: "user", content: message }]); setLoading(true);
@@ -127,69 +159,21 @@ function App() {
   };
 
   const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-
-    if (!supabase) {
-      setAuthOpen(true);
-      return;
-    }
-
-    const { data: sessionData } = await supabase.auth.getSession();
-    const userId = sessionData.session?.user.id;
-    if (!userId) {
-      setAuthOpen(true);
-      return;
-    }
-
-    if (file.size > 6 * 1024 * 1024) {
-      setMessages((items) => [...items, { role: "assistant", content: "This upload is larger than 6 MB. For larger files, resumable uploads should be used." }]);
-      return;
-    }
-
+    const file = event.target.files?.[0]; event.target.value = ""; if (!file) return;
+    if (!supabase) { setAuthOpen(true); return; }
+    const session = (await supabase.auth.getSession()).data.session;
+    if (!session?.access_token) { setAuthOpen(true); return; }
+    if (file.size > 25 * 1024 * 1024) { setMessages(items => [...items, { role: "assistant", content: "This document exceeds the 25 MB upload limit." }]); return; }
     setUploading(true);
     try {
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const path = `${userId}/${crypto.randomUUID()}-${safeName}`;
-      const { error: uploadError } = await supabase.storage.from("ai-files").upload(path, file, {
-        contentType: file.type || "application/octet-stream",
-        upsert: false,
-      });
-      if (uploadError) throw uploadError;
-
-      const { error: metadataError } = await supabase.from("files").insert({
-        user_id: userId,
-        name: file.name,
-        storage_path: path,
-        mime_type: file.type || "application/octet-stream",
-        size_bytes: file.size,
-      });
-      if (metadataError) throw metadataError;
-
-      const textTypes = [
-        "text/", "application/json", "application/xml", "application/javascript",
-        "application/x-javascript", "application/csv"
-      ];
-      const isText = textTypes.some((type) => file.type.startsWith(type)) ||
-        /\.(txt|md|csv|json|xml|js|ts|tsx|jsx|css|html|log)$/i.test(file.name);
-
-      if (!isText) {
-        setMessages((items) => [...items, {
-          role: "assistant",
-          content: `Uploaded “${file.name}” successfully. This first document-analysis release can analyze text-based files directly; PDF/DOCX extraction will be added in the next document-processing layer.`
-        }]);
-        return;
-      }
-
-      const content = await file.text();
-      const clipped = content.slice(0, 50000);
-      await sendMessage(`Analyze the uploaded file “${file.name}”.\n\nFile contents:\n\n${clipped}${content.length > 50000 ? "\n\n[Content truncated at 50,000 characters.]" : ""}`);
-    } catch (error) {
-      setMessages((items) => [...items, { role: "assistant", content: error instanceof Error ? error.message : "File upload failed." }]);
-    } finally {
-      setUploading(false);
-    }
+      const form = new FormData(); form.append("file", file);
+      const response = await fetch("/api/documents/analyze", { method: "POST", headers: { Authorization: "Bearer " + session.access_token }, body: form });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Document upload failed.");
+      await loadDocuments(); setActive("Library");
+      setMessages(items => [...items, { role: "assistant", content: "Uploaded “" + data.filename + "” successfully. Extracted " + (data.chunks ?? 0) + " chunks and " + (data.indexing?.status === "indexed" ? "indexed it for private RAG." : "saved it; embeddings are not configured yet.") }]);
+    } catch (error) { setMessages(items => [...items, { role: "assistant", content: error instanceof Error ? error.message : "Document upload failed." }]); }
+    finally { setUploading(false); }
   };
 
   const compareModels = async () => {
@@ -267,6 +251,14 @@ function App() {
         </header>
 
         <section className="content">
+          {active === "Library" ? (
+            <div className="library-panel">
+              <div className="comparison-header"><div><strong>Document Library</strong><span>Your private documents stored in Supabase and available to RAG.</span></div><button className="tool-btn" onClick={() => void loadDocuments()} disabled={libraryLoading}>{libraryLoading ? "Refreshing…" : "Refresh"}</button></div>
+              {libraryError && <div className="library-error">{libraryError}</div>}
+              {libraryLoading && documents.length === 0 ? <div className="comparison-empty">Loading your documents…</div> : documents.length === 0 ? <div className="comparison-empty"><FileText size={24} /><p>No documents yet.</p><span>Use Attach below to upload a PDF, DOCX, TXT, or supported text file.</span></div> : <div className="document-list">{documents.map(doc => <div className="document-card" key={doc.id}><div className="quick-icon"><FileText size={18} /></div><div className="document-info"><strong>{doc.name}</strong><small>{formatBytes(doc.sizeBytes)} · {new Date(doc.createdAt).toLocaleDateString()}</small></div><button className="tool-btn" onClick={() => void downloadDocument(doc.id)}>Open</button><button className="icon-btn" onClick={() => void deleteDocument(doc.id)} aria-label={"Delete " + doc.name}><X size={17} /></button></div>)}</div>}
+            </div>
+          ) : (
+          <>
           {messages.length === 0 ? (
             <div className="hero">
               <div className="eyebrow"><Sparkles size={15} /> Unified intelligence workspace</div>
@@ -332,6 +324,8 @@ function App() {
               {!comparing && compareResults.length === 0 && <div className="comparison-empty">No configured providers are available.</div>}
             </div>
           )}
+
+          </>)}
 
           <div className="composer-wrap">
             <div className="composer">

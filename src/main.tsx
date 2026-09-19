@@ -10,7 +10,7 @@ import { AuthPanel } from "./components/AuthPanel";
 import { supabase, supabaseConfigured } from "./lib/supabase";
 
 type NavItem = { label: string; icon: typeof MessageSquare };
-type Message = { role: "user" | "assistant"; content: string; id?: string };\ntype Document = { id: string; name: string; mimeType: string; sizeBytes: number; createdAt: string; indexed?: boolean };\ntype RagSource = { fileId: string; fileName: string; chunkIndex: number; similarity?: number };
+type Message = { role: "user" | "assistant"; content: string; id?: string };\ntype RagSource = { id: string; fileId: string; fileName: string; chunkIndex: number; similarity: number };\ntype Document = { id: string; name: string; mimeType: string; sizeBytes: number; createdAt: string; indexed?: boolean };\ntype RagSource = { fileId: string; fileName: string; chunkIndex: number; similarity?: number };
 
 const nav: NavItem[] = [
   { label: "AI Chat", icon: MessageSquare },
@@ -41,7 +41,7 @@ function formatBytes(bytes: number) { if (!bytes) return "0 B"; const units = ["
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);\n  const [documents, setDocuments] = useState<Array<{ id: string; name: string; mimeType: string; sizeBytes: number; createdAt: string }>>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
-  const [libraryError, setLibraryError] = useState<string | null>(null);
+  const [libraryError, setLibraryError] = useState<string | null>(null);\n  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);\n  const [ragSources, setRagSources] = useState<RagSource[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadWorkspace = async (userId: string) => {
@@ -155,7 +155,7 @@ function formatBytes(bytes: number) { if (!bytes) return "0 B"; const units = ["
       const response=await fetch("/api/ai/stream",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token},body:JSON.stringify(body)});if(!response.ok||!response.body){const d=await response.json().catch(()=>({}));throw Error(d.error||"AI streaming request failed.")}
       const reader=response.body.getReader(),decoder=new TextDecoder();let buffer="",assistantText="",assistantIndex=-1;
       const addDelta=(delta:string)=>{assistantText+=delta;setMessages(items=>{const next=[...items];if(assistantIndex<0){assistantIndex=next.length;next.push({role:"assistant",content:assistantText})}else next[assistantIndex]={...next[assistantIndex],content:assistantText};return next})};
-      while(true){const x=await reader.read();if(x.done)break;buffer+=decoder.decode(x.value,{stream:true});const events=buffer.split(/\n\n/);buffer=events.pop()||"";for(const event of events){const line=event.split(/\r?\n/).find(x=>x.startsWith("data:"));if(!line)continue;const d=JSON.parse(line.slice(5).trim());if(d.type==="delta"&&d.text)addDelta(d.text);if(d.type==="sources")setRagSources(d.sources??[]);if(d.type==="error")throw Error(d.error||"AI streaming failed.")}}
+      while(true){const x=await reader.read();if(x.done)break;buffer+=decoder.decode(x.value,{stream:true});const events=buffer.split(/\n\n/);buffer=events.pop()||"";for(const event of events){const line=event.split(/\r?\n/).find(x=>x.startsWith("data:"));if(!line)continue;const d=JSON.parse(line.slice(5).trim());if(d.type==="delta"&&d.text)addDelta(d.text);if(d.type==="sources")setRagSources(d.sources??[]);if(d.type==="sources")setRagSources(d.sources??[]);if(d.type==="error")throw Error(d.error||"AI streaming failed.")}}
       if(!assistantText)throw Error("AI returned an empty response.");setResearchSources([]);
     }catch(error){setMessages(items=>[...items,{role:"assistant",content:error instanceof Error?error.message:"Something went wrong."}])}finally{setLoading(false)}
   };
@@ -279,7 +279,7 @@ function formatBytes(bytes: number) { if (!bytes) return "0 B"; const units = ["
             </div>
           )}
 
-          {messages.length === 0 && (
+          {selectedDocumentIds.length > 0 && active === "AI Chat" && <div className="library-error">Document chat active: {selectedDocumentIds.length} selected document{selectedDocumentIds.length > 1 ? "s" : ""}. <button className="tool-btn" onClick={() => setSelectedDocumentIds([])}>Clear</button></div>}\n\n          {ragSources.length > 0 && active === "AI Chat" && <div className="research-sources"><div className="comparison-header"><div><strong>Document sources</strong><span>Relevant excerpts used for this answer.</span></div></div>{ragSources.map((source) => <div className="source-card" key={source.id}><span>§</span><div><strong>{source.fileName}</strong><small>Chunk {source.chunkIndex + 1} · {Math.round(source.similarity * 100)}% similarity</small></div></div>)}</div>}\n\n          {messages.length === 0 && (
             <div className="quick-grid">
               {[
                 [Search, "Deep Research", "Search, cross-check and synthesize"],

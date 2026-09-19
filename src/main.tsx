@@ -30,6 +30,8 @@ function App() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [apiReady, setApiReady] = useState<boolean | null>(null);
+  const [researchReady, setResearchReady] = useState<boolean | null>(null);
+  const [researchSources, setResearchSources] = useState<Array<{ title: string; url: string; snippet: string }>>([]);
   const [selectedModel, setSelectedModel] = useState("auto");
   const [modelCatalog, setModelCatalog] = useState<Array<{ provider: string; configured: boolean; model: string; selector: string }>>([]);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -75,6 +77,11 @@ function App() {
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then((data) => setModelCatalog(data.models ?? []))
       .catch(() => setModelCatalog([]));
+
+    fetch("/api/research/status")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((data) => setResearchReady(Boolean(data.configured)))
+      .catch(() => setResearchReady(false));
 
     fetch("/api/health")
       .then((r) => r.ok ? r.json() : Promise.reject())
@@ -139,13 +146,26 @@ function App() {
         }
       }
 
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, model: selectedModel }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "AI request failed.");
+      let data: { output?: string; provider?: string; model?: string };
+      if (active === "Research") {
+        const response = await fetch("/api/research", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message, model: selectedModel }),
+        });
+        data = await response.json();
+        if (!response.ok) throw new Error((data as { error?: string }).error || "Research request failed.");
+        setResearchSources((data as { sources?: Array<{ title: string; url: string; snippet: string }> }).sources ?? []);
+      } else {
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message, model: selectedModel }),
+        });
+        data = await response.json();
+        if (!response.ok) throw new Error(data.output ? String(data.output) : "AI request failed.");
+        setResearchSources([]);
+      }
 
       const assistant = String(data.output ?? "");
       setMessages((items) => [...items, { role: "assistant", content: assistant }]);
@@ -262,6 +282,7 @@ function App() {
 
   const startNewChat = () => {
     setActive("AI Chat");
+    setResearchSources([]);
     setConversationId(null);
     setMessages([]);
     setPrompt("");
@@ -303,7 +324,7 @@ function App() {
                 </option>
               ))}
             </select>
-            <small>{apiReady === true ? "AI provider available" : apiReady === false ? "Configure an AI key" : "Checking connection..."}</small>
+            <small>{active === "Research" ? (researchReady === true ? "Web research available" : researchReady === false ? "Configure search API" : "Checking research...") : (apiReady === true ? "AI provider available" : apiReady === false ? "Configure an AI key" : "Checking connection...")}</small>
           </div>
           <div className="top-actions">
             <button className="icon-btn" aria-label="Search"><Search size={18} /></button>
@@ -340,13 +361,24 @@ function App() {
               ].map(([Icon, title, description]) => {
                 const C = Icon as typeof Search;
                 return (
-                  <button className="quick-card" key={title as string} onClick={() => { setActive(title as string); setPrompt(title === "Deep Research" ? "Research this topic and give me a sourced summary: " : title === "Build" ? "Help me build: " : title === "Analyze" ? "Analyze this: " : "Create this: "); }}>
+                  <button className="quick-card" key={title as string} onClick={() => { setActive(title === "Deep Research" ? "Research" : title as string); setPrompt(title === "Deep Research" ? "Research this topic and give me a sourced summary: " : title === "Build" ? "Help me build: " : title === "Analyze" ? "Analyze this: " : "Create this: "); }}>
                     <div className="quick-icon"><C size={19} /></div>
                     <strong>{title as string}</strong>
                     <span>{description as string}</span>
                   </button>
                 );
               })}
+            </div>
+          )}
+
+          {researchSources.length > 0 && active === "Research" && (
+            <div className="research-sources">
+              <div className="comparison-header"><div><strong>Research sources</strong><span>Live results returned by the configured search provider.</span></div></div>
+              {researchSources.map((source, index) => (
+                <a className="source-card" href={source.url} target="_blank" rel="noreferrer" key={source.url}>
+                  <span>{index + 1}</span><div><strong>{source.title}</strong><small>{source.url}</small><p>{source.snippet}</p></div>
+                </a>
+              ))}
             </div>
           )}
 
@@ -380,7 +412,7 @@ function App() {
                 <button className="send-btn" disabled={!prompt.trim() || loading} onClick={() => void sendMessage()} aria-label="Send"><Send size={17} /></button>
               </div>
             </div>
-            <p className="disclaimer">{!supabaseConfigured ? "Connect Supabase to enable accounts and persistent user data. " : userEmail ? `Signed in as ${userEmail}. Conversations are saved to Supabase. ` : "Sign in to save your workspace. "}{apiReady === false ? "Connect OPENAI_API_KEY on the server to enable live AI responses." : "AI output can be inaccurate. Verify important information."}</p>
+            <p className="disclaimer">{!supabaseConfigured ? "Connect Supabase to enable accounts and persistent user data. " : userEmail ? `Signed in as ${userEmail}. Conversations are saved to Supabase. ` : "Sign in to save your workspace. "}{apiReady === false ? "Connect OPENAI_API_KEY on the server to enable live AI responses." : "active === "Research" && researchReady === false ? "Add BRAVE_SEARCH_API_KEY on the server to enable web research. " : "AI output can be inaccurate. Verify important information.""}</p>
           </div>
         </section>
       </main>

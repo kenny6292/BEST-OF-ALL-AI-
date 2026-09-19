@@ -73,9 +73,9 @@ function App() {
   };
 
   useEffect(() => {
-    fetch("/api/models")
+    fetch("/api/ai/providers")
       .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((data) => setModelCatalog(data.models ?? []))
+      .then((data) => setModelCatalog((data.providers ?? []).map((p: any) => ({...p, selector: `${p.provider}:${p.model}`}))))
       .catch(() => setModelCatalog([]));
 
     fetch("/api/research/status")
@@ -85,7 +85,7 @@ function App() {
 
     fetch("/api/health")
       .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((data) => setApiReady(Boolean(data.providers?.openai)))
+      .then((data) => setApiReady(Boolean(data.aiConfigured)))
       .catch(() => setApiReady(false));
 
     if (!supabase) return;
@@ -146,28 +146,44 @@ function App() {
         }
       }
 
-      let data: { output?: string; provider?: string; model?: string };
+      let data: { text?: string; provider?: string; model?: string };
       if (active === "Research") {
         const response = await fetch("/api/research", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message, model: selectedModel }),
+          body: JSON.stringify({ message }),
         });
-        data = await response.json();
-        if (!response.ok) throw new Error((data as { error?: string }).error || "Research request failed.");
-        setResearchSources((data as { sources?: Array<{ title: string; url: string; snippet: string }> }).sources ?? []);
+        const researchData = await response.json();
+        if (!response.ok) throw new Error(researchData.error || "Research request failed.");
+        setResearchSources(researchData.sources ?? []);
+        data = { text: researchData.output, provider: researchData.provider, model: researchData.model };
       } else {
-        const response = await fetch("/api/chat", {
+        const session = supabase ? (await supabase.auth.getSession()).data.session : null;
+        if (!session?.access_token) {
+          setAuthOpen(true);
+          throw new Error("Please sign in before using AI chat.");
+        }
+        const [provider, ...modelParts] = selectedModel.split(":");
+        const body: any = {
+          messages: [...messages, { role: "user", content: message }],
+          conversationId: activeConversationId,
+        };
+        if (selectedModel !== "auto") {
+          body.provider = provider;
+          body.model = modelParts.join(":");
+        }
+        const response = await fetch("/api/ai/generate", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message, model: selectedModel }),
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify(body),
         });
-        data = await response.json();
-        if (!response.ok) throw new Error(data.output ? String(data.output) : "AI request failed.");
+        const aiData = await response.json();
+        if (!response.ok) throw new Error(aiData.error || "AI request failed.");
+        data = aiData;
         setResearchSources([]);
       }
 
-      const assistant = String(data.output ?? "");
+      const assistant = String(data.text ?? "");
       setMessages((items) => [...items, { role: "assistant", content: assistant }]);
 
       if (supabase && activeConversationId) {
@@ -412,7 +428,7 @@ function App() {
                 <button className="send-btn" disabled={!prompt.trim() || loading} onClick={() => void sendMessage()} aria-label="Send"><Send size={17} /></button>
               </div>
             </div>
-            <p className="disclaimer">{!supabaseConfigured ? "Connect Supabase to enable accounts and persistent user data. " : userEmail ? `Signed in as ${userEmail}. Conversations are saved to Supabase. ` : "Sign in to save your workspace. "}{apiReady === false ? "Connect OPENAI_API_KEY on the server to enable live AI responses." : "active === "Research" && researchReady === false ? "Add BRAVE_SEARCH_API_KEY on the server to enable web research. " : "AI output can be inaccurate. Verify important information.""}</p>
+            <p className="disclaimer">{!supabaseConfigured ? "Connect Supabase to enable accounts and persistent user data. " : userEmail ? `Signed in as ${userEmail}. Conversations are saved to Supabase. ` : "Sign in to save your workspace. "}{apiReady === false ? "Configure an AI provider key on the server to enable live AI responses. " : ""}{active === "Research" && researchReady === false ? "Add BRAVE_SEARCH_API_KEY on the server to enable web research. " : ""}AI output can be inaccurate. Verify important information.</p>
           </div>
         </section>
       </main>

@@ -110,102 +110,20 @@ function App() {
   }, []);
 
   const sendMessage = async (text = prompt) => {
-    const message = text.trim();
-    if (!message || loading) return;
-
-    setPrompt("");
-    setMessages((items) => [...items, { role: "user", content: message }]);
-    setLoading(true);
-
+    const message = text.trim(); if (!message || loading) return;
+    setPrompt(""); setMessages((items) => [...items, { role: "user", content: message }]); setLoading(true);
     try {
-      let activeConversationId = conversationId;
-      let userId: string | null = null;
-
-      if (supabase) {
-        const { data: sessionData } = await supabase.auth.getSession();
-        userId = sessionData.session?.user.id ?? null;
-
-        if (userId && !activeConversationId) {
-          const { data: created } = await supabase
-            .from("conversations")
-            .insert({ user_id: userId, title: message.slice(0, 70), model: selectedModel })
-            .select("id")
-            .single();
-          activeConversationId = created?.id ?? null;
-          setConversationId(activeConversationId);
-        }
-
-        if (userId && activeConversationId) {
-          await supabase.from("messages").insert({
-            conversation_id: activeConversationId,
-            user_id: userId,
-            role: "user",
-            content: message,
-            model: selectedModel,
-          });
-        }
-      }
-
-      let data: { text?: string; provider?: string; model?: string };
-      if (active === "Research") {
-        const response = await fetch("/api/research", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message }),
-        });
-        const researchData = await response.json();
-        if (!response.ok) throw new Error(researchData.error || "Research request failed.");
-        setResearchSources(researchData.sources ?? []);
-        data = { text: researchData.output, provider: researchData.provider, model: researchData.model };
-      } else {
-        const session = supabase ? (await supabase.auth.getSession()).data.session : null;
-        if (!session?.access_token) {
-          setAuthOpen(true);
-          throw new Error("Please sign in before using AI chat.");
-        }
-        const [provider, ...modelParts] = selectedModel.split(":");
-        const body: any = {
-          messages: [...messages, { role: "user", content: message }],
-          conversationId: activeConversationId,
-        };
-        if (selectedModel !== "auto") {
-          body.provider = provider;
-          body.model = modelParts.join(":");
-        }
-        const response = await fetch("/api/ai/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify(body),
-        });
-        const aiData = await response.json();
-        if (!response.ok) throw new Error(aiData.error || "AI request failed.");
-        data = aiData;
-        setResearchSources([]);
-      }
-
-      const assistant = String(data.text ?? "");
-      setMessages((items) => [...items, { role: "assistant", content: assistant }]);
-
-      if (supabase && activeConversationId) {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const userId = sessionData.session?.user.id;
-        if (userId) {
-          await supabase.from("messages").insert({
-            conversation_id: activeConversationId,
-            user_id: userId,
-            role: "assistant",
-            content: assistant,
-            model: data.model ?? selectedModel,
-          });
-          await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", activeConversationId);
-        }
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Something went wrong.";
-      setMessages((items) => [...items, { role: "assistant", content: errorMessage }]);
-    } finally {
-      setLoading(false);
-    }
+      let activeConversationId=conversationId;
+      if(supabase&&!activeConversationId){const {data:s}=await supabase.auth.getSession();const uid=s.session?.user.id;if(uid){const {data:created}=await supabase.from("conversations").insert({user_id:uid,title:message.slice(0,70),model:selectedModel}).select("id").single();activeConversationId=created?.id??null;setConversationId(activeConversationId)}}
+      if(active==="Research"){const response=await fetch("/api/research",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message})});const d=await response.json();if(!response.ok)throw Error(d.error||"Research request failed.");setResearchSources(d.sources??[]);setMessages(items=>[...items,{role:"assistant",content:String(d.output??"")}]);return}
+      const session=supabase?(await supabase.auth.getSession()).data.session:null;if(!session?.access_token){setAuthOpen(true);throw Error("Please sign in before using AI chat.")}
+      const [provider,...modelParts]=selectedModel.split(":");const body:any={messages:[...messages,{role:"user",content:message}],conversationId:activeConversationId};if(selectedModel!=="auto"){body.provider=provider;body.model=modelParts.join(":")}
+      const response=await fetch("/api/ai/stream",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token},body:JSON.stringify(body)});if(!response.ok||!response.body){const d=await response.json().catch(()=>({}));throw Error(d.error||"AI streaming request failed.")}
+      const reader=response.body.getReader(),decoder=new TextDecoder();let buffer="",assistantText="",assistantIndex=-1;
+      const addDelta=(delta:string)=>{assistantText+=delta;setMessages(items=>{const next=[...items];if(assistantIndex<0){assistantIndex=next.length;next.push({role:"assistant",content:assistantText})}else next[assistantIndex]={...next[assistantIndex],content:assistantText};return next})};
+      while(true){const x=await reader.read();if(x.done)break;buffer+=decoder.decode(x.value,{stream:true});const events=buffer.split(/\n\n/);buffer=events.pop()||"";for(const event of events){const line=event.split(/\r?\n/).find(x=>x.startsWith("data:"));if(!line)continue;const d=JSON.parse(line.slice(5).trim());if(d.type==="delta"&&d.text)addDelta(d.text);if(d.type==="error")throw Error(d.error||"AI streaming failed.")}}
+      if(!assistantText)throw Error("AI returned an empty response.");setResearchSources([]);
+    }catch(error){setMessages(items=>[...items,{role:"assistant",content:error instanceof Error?error.message:"Something went wrong."}])}finally{setLoading(false)}
   };
 
   const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {

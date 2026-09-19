@@ -10,7 +10,7 @@ import { AuthPanel } from "./components/AuthPanel";
 import { supabase, supabaseConfigured } from "./lib/supabase";
 
 type NavItem = { label: string; icon: typeof MessageSquare };
-type Message = { role: "user" | "assistant"; content: string; id?: string };\ntype RagSource = { id: string; fileId: string; fileName: string; chunkIndex: number; similarity: number };\ntype Document = { id: string; name: string; mimeType: string; sizeBytes: number; createdAt: string; indexed?: boolean };\ntype RagSource = { fileId: string; fileName: string; chunkIndex: number; similarity?: number };
+type Message = { role: "user" | "assistant"; content: string; id?: string };\ntype RagSource = { id: string; fileId: string; fileName: string; chunkIndex: number; similarity: number };\ntype Document = { id: string; name: string; mimeType: string; sizeBytes: number; createdAt: string; indexed?: boolean; indexingStatus?: string };\ntype Document = { id: string; name: string; mimeType: string; sizeBytes: number; createdAt: string; indexed?: boolean };\ntype RagSource = { fileId: string; fileName: string; chunkIndex: number; similarity?: number };
 
 const nav: NavItem[] = [
   { label: "AI Chat", icon: MessageSquare },
@@ -39,7 +39,7 @@ function formatBytes(bytes: number) { if (!bytes) return "0 B"; const units = ["
   const [comparing, setComparing] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);\n  const [documents, setDocuments] = useState<Array<{ id: string; name: string; mimeType: string; sizeBytes: number; createdAt: string }>>([]);
+  const [uploading, setUploading] = useState(false);\n  const [documents, setDocuments] = useState<Document[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [libraryError, setLibraryError] = useState<string | null>(null);\n  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);\n  const [ragSources, setRagSources] = useState<RagSource[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);

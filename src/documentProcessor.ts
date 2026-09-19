@@ -1,5 +1,8 @@
-import pdfParse from "pdf-parse";
+import { createRequire } from "node:module";
 import mammoth from "mammoth";
+
+const require = createRequire(import.meta.url);
+const pdfParse = require("pdf-parse") as (buffer: Buffer) => Promise<{ text: string; numpages: number }>;
 
 export type DocumentFormat = "pdf" | "docx" | "txt";
 export interface ExtractedDocument { text: string; format: DocumentFormat; pages?: number; characters: number; words: number; }

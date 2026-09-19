@@ -24,7 +24,16 @@ const nav: NavItem[] = [
   { label: "Library", icon: Library },
 ];
 
-async function analyzeCode() { setCodeRunning(true); try { const s=await supabase.auth.getSession(); const t=s.data.session?.access_token; if(!t) throw new Error("Sign in to analyze code."); const r=await fetch("/api/code/analyze",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+t},body:JSON.stringify({code:codeInput,language:"auto"})}); const d=await r.json(); if(!r.ok) throw new Error(d.error||"Code analysis failed."); setCodeAnalysis(d.analysis||""); } catch(e:any){setCodeAnalysis(e?.message||"Code analysis failed.");} finally{setCodeRunning(false);} }\n\nasync function createImage() { setImageRunning(true); try { const s=await supabase.auth.getSession(); const t=s.data.session?.access_token; if(!t) throw new Error("Sign in to create images."); const r=await fetch("/api/create/image",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+t},body:JSON.stringify({prompt})}); const d=await r.json(); if(!r.ok) throw new Error(d.error||"Image generation failed."); setCreatedImage(d.image||null); } catch(e:any){ setMessages(m=>[...m,{role:"assistant",content:e?.message||"Image generation failed."}]); } finally { setImageRunning(false); } }\n\nasync function runAdvancedResearch() { setResearchRunning(true); try { const s=await supabase.auth.getSession(); const t=s.data.session?.access_token; if(!t){setResearchSources([{title:"Authentication",url:"",snippet:"Sign in to run research."}]);return;} const r=await fetch("/api/research/advanced?q="+encodeURIComponent(prompt),{headers:{Authorization:"Bearer "+t}}); const d=await r.json(); if(!r.ok) throw new Error(d.error||"Research failed."); setResearchSources(d.sources||[]); } catch(e:any){setResearchSources([{title:"Research error",url:"",snippet:e?.message||"Research failed."}]);} finally {setResearchRunning(false);} }\n\nasync function runAgents() { setAgentRunning(true); try { const s=await supabase.auth.getSession(); const t=s.data.session?.access_token; if(!t){setAgentResults([{task:"Authentication",error:"Sign in to run agents."}]);return;} const r=await fetch("/api/agents/run",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+t},body:JSON.stringify({tasks:agentTasks})}); const d=await r.json(); if(!r.ok) throw new Error(d.error||"Agent run failed."); setAgentResults(d.results||[]); } catch(e:any){setAgentResults([{task:"Agent run",error:e?.message||"Agent run failed."}]);} finally {setAgentRunning(false);} }\nfunction formatBytes(bytes: number) { if (!bytes) return "0 B"; const units = ["B", "KB", "MB", "GB", "TB"]; const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1); return (bytes / Math.pow(1024, i)).toFixed(i ? 1 : 0) + " " + units[i]; }\n\nfunction App() {
+async function analyzeCode() { setCodeRunning(true); try { const s=await supabase.auth.getSession(); const t=s.data.session?.access_token; if(!t) throw new Error("Sign in to analyze code."); const r=await fetch("/api/code/analyze",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+t},body:JSON.stringify({code:codeInput,language:"auto"})}); const d=await r.json(); if(!r.ok) throw new Error(d.error||"Code analysis failed."); setCodeAnalysis(d.analysis||""); } catch(e:any){setCodeAnalysis(e?.message||"Code analysis failed.");} finally{setCodeRunning(false);} }
+
+async function createImage() { setImageRunning(true); try { const s=await supabase.auth.getSession(); const t=s.data.session?.access_token; if(!t) throw new Error("Sign in to create images."); const r=await fetch("/api/create/image",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+t},body:JSON.stringify({prompt})}); const d=await r.json(); if(!r.ok) throw new Error(d.error||"Image generation failed."); setCreatedImage(d.image||null); } catch(e:any){ setMessages(m=>[...m,{role:"assistant",content:e?.message||"Image generation failed."}]); } finally { setImageRunning(false); } }
+
+async function runAdvancedResearch() { setResearchRunning(true); try { const s=await supabase.auth.getSession(); const t=s.data.session?.access_token; if(!t){setResearchSources([{title:"Authentication",url:"",snippet:"Sign in to run research."}]);return;} const r=await fetch("/api/research/advanced?q="+encodeURIComponent(prompt),{headers:{Authorization:"Bearer "+t}}); const d=await r.json(); if(!r.ok) throw new Error(d.error||"Research failed."); setResearchSources(d.sources||[]); } catch(e:any){setResearchSources([{title:"Research error",url:"",snippet:e?.message||"Research failed."}]);} finally {setResearchRunning(false);} }
+
+async function runAgents() { setAgentRunning(true); try { const s=await supabase.auth.getSession(); const t=s.data.session?.access_token; if(!t){setAgentResults([{task:"Authentication",error:"Sign in to run agents."}]);return;} const r=await fetch("/api/agents/run",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+t},body:JSON.stringify({tasks:agentTasks})}); const d=await r.json(); if(!r.ok) throw new Error(d.error||"Agent run failed."); setAgentResults(d.results||[]); } catch(e:any){setAgentResults([{task:"Agent run",error:e?.message||"Agent run failed."}]);} finally {setAgentRunning(false);} }
+function formatBytes(bytes: number) { if (!bytes) return "0 B"; const units = ["B", "KB", "MB", "GB", "TB"]; const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1); return (bytes / Math.pow(1024, i)).toFixed(i ? 1 : 0) + " " + units[i]; }
+
+function App() {
   const [sidebar, setSidebar] = useState(true);
   const [active, setActive] = useState("AI Chat");
   const [prompt, setPrompt] = useState("");
@@ -33,7 +42,11 @@ async function analyzeCode() { setCodeRunning(true); try { const s=await supabas
   const [loading, setLoading] = useState(false); const [agentTasks,setAgentTasks]=useState<string[]>(["Research and summarize the key considerations for my task."]); const [agentResults,setAgentResults]=useState<any[]>([]); const [agentRunning,setAgentRunning]=useState(false);
   const [apiReady, setApiReady] = useState<boolean | null>(null);
   const [researchReady, setResearchReady] = useState<boolean | null>(null);
-  const [researchSources, setResearchSources] = useState<Array<{ title: string; url: string; snippet: string }>>([]);\n  const [researchRunning,setResearchRunning]=useState(false);\n  const [createdImage,setCreatedImage]=useState<string|null>(null);\n  const [codeInput,setCodeInput]=useState(""); const [codeAnalysis,setCodeAnalysis]=useState(""); const [codeRunning,setCodeRunning]=useState(false);\n  const [imageRunning,setImageRunning]=useState(false);
+  const [researchSources, setResearchSources] = useState<Array<{ title: string; url: string; snippet: string }>>([]);
+  const [researchRunning,setResearchRunning]=useState(false);
+  const [createdImage,setCreatedImage]=useState<string|null>(null);
+  const [codeInput,setCodeInput]=useState(""); const [codeAnalysis,setCodeAnalysis]=useState(""); const [codeRunning,setCodeRunning]=useState(false);
+  const [imageRunning,setImageRunning]=useState(false);
   const [selectedModel, setSelectedModel] = useState("auto");
   const [modelCatalog, setModelCatalog] = useState<Array<{ provider: string; configured: boolean; model: string; selector: string }>>([]);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -41,9 +54,12 @@ async function analyzeCode() { setCodeRunning(true); try { const s=await supabas
   const [comparing, setComparing] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);\n  const [documents, setDocuments] = useState<Document[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [documents, setDocuments] = useState<Document[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
-  const [libraryError, setLibraryError] = useState<string | null>(null);\n  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);\n  const [ragSources, setRagSources] = useState<RagSource[]>([]);
+  const [libraryError, setLibraryError] = useState<string | null>(null);
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
+  const [ragSources, setRagSources] = useState<RagSource[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadWorkspace = async (userId: string) => {
@@ -157,7 +173,10 @@ async function analyzeCode() { setCodeRunning(true); try { const s=await supabas
       const response=await fetch("/api/ai/stream",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token},body:JSON.stringify(body)});if(!response.ok||!response.body){const d=await response.json().catch(()=>({}));throw Error(d.error||"AI streaming request failed.")}
       const reader=response.body.getReader(),decoder=new TextDecoder();let buffer="",assistantText="",assistantIndex=-1;
       const addDelta=(delta:string)=>{assistantText+=delta;setMessages(items=>{const next=[...items];if(assistantIndex<0){assistantIndex=next.length;next.push({role:"assistant",content:assistantText})}else next[assistantIndex]={...next[assistantIndex],content:assistantText};return next})};
-      while(true){const x=await reader.read();if(x.done)break;buffer+=decoder.decode(x.value,{stream:true});const events=buffer.split(/\n\n/);buffer=events.pop()||"";for(const event of events){const line=event.split(/\r?\n/).find(x=>x.startsWith("data:"));if(!line)continue;const d=JSON.parse(line.slice(5).trim());if(d.type==="delta"&&d.text)addDelta(d.text);if(d.type==="sources")setRagSources(d.sources??[]);if(d.type==="sources")setRagSources(d.sources??[]);if(d.type==="error")throw Error(d.error||"AI streaming failed.")}}
+      while(true){const x=await reader.read();if(x.done)break;buffer+=decoder.decode(x.value,{stream:true});const events=buffer.split(/
+
+/);buffer=events.pop()||"";for(const event of events){const line=event.split(/\r?
+/).find(x=>x.startsWith("data:"));if(!line)continue;const d=JSON.parse(line.slice(5).trim());if(d.type==="delta"&&d.text)addDelta(d.text);if(d.type==="sources")setRagSources(d.sources??[]);if(d.type==="sources")setRagSources(d.sources??[]);if(d.type==="error")throw Error(d.error||"AI streaming failed.")}}
       if(!assistantText)throw Error("AI returned an empty response.");setResearchSources([]);
     }catch(error){setMessages(items=>[...items,{role:"assistant",content:error instanceof Error?error.message:"Something went wrong."}])}finally{setLoading(false)}
   };
@@ -202,7 +221,11 @@ async function analyzeCode() { setCodeRunning(true); try { const s=await supabas
     }
   };
 
-  const toggleDocument = (id: string) => setSelectedDocumentIds(items => items.includes(id) ? items.filter(x => x !== id) : [...items, id]);\n\n  const chatWithDocument = (id: string) => { setSelectedDocumentIds([id]); setActive("AI Chat"); setPrompt("Ask a question about this document: "); };\n\n  const startNewChat = () => {
+  const toggleDocument = (id: string) => setSelectedDocumentIds(items => items.includes(id) ? items.filter(x => x !== id) : [...items, id]);
+
+  const chatWithDocument = (id: string) => { setSelectedDocumentIds([id]); setActive("AI Chat"); setPrompt("Ask a question about this document: "); };
+
+  const startNewChat = () => {
     setActive("AI Chat");
     setResearchSources([]);
     setConversationId(null);
@@ -281,7 +304,11 @@ async function analyzeCode() { setCodeRunning(true); try { const s=await supabas
             </div>
           )}
 
-          {selectedDocumentIds.length > 0 && active === "AI Chat" && <div className="library-error">Document chat active: {selectedDocumentIds.length} selected document{selectedDocumentIds.length > 1 ? "s" : ""}. <button className="tool-btn" onClick={() => setSelectedDocumentIds([])}>Clear</button></div>}\n\n          {ragSources.length > 0 && active === "AI Chat" && <div className="research-sources"><div className="comparison-header"><div><strong>Document sources</strong><span>Relevant excerpts used for this answer.</span></div></div>{ragSources.map((source) => <div className="source-card" key={source.id}><span>§</span><div><strong>{source.fileName}</strong><small>Chunk {source.chunkIndex + 1} · {Math.round(source.similarity * 100)}% similarity</small></div></div>)}</div>}\n\n          {messages.length === 0 && (
+          {selectedDocumentIds.length > 0 && active === "AI Chat" && <div className="library-error">Document chat active: {selectedDocumentIds.length} selected document{selectedDocumentIds.length > 1 ? "s" : ""}. <button className="tool-btn" onClick={() => setSelectedDocumentIds([])}>Clear</button></div>}
+
+          {ragSources.length > 0 && active === "AI Chat" && <div className="research-sources"><div className="comparison-header"><div><strong>Document sources</strong><span>Relevant excerpts used for this answer.</span></div></div>{ragSources.map((source) => <div className="source-card" key={source.id}><span>§</span><div><strong>{source.fileName}</strong><small>Chunk {source.chunkIndex + 1} · {Math.round(source.similarity * 100)}% similarity</small></div></div>)}</div>}
+
+          {messages.length === 0 && (
             <div className="quick-grid">
               {[
                 [Search, "Deep Research", "Search, cross-check and synthesize"],
@@ -301,7 +328,9 @@ async function analyzeCode() { setCodeRunning(true); try { const s=await supabas
             </div>
           )}
 
-          {ragSources.length > 0 && active === "AI Chat" && <div className="research-sources"><div className="comparison-header"><div><strong>Document sources</strong><span>Private document chunks used for this answer.</span></div></div>{ragSources.map((source, index) => <div className="source-card" key={source.fileId + "-" + source.chunkIndex}><span>{index + 1}</span><div><strong>{source.fileName}</strong><small>Chunk {source.chunkIndex + 1}{typeof source.similarity === "number" ? " · " + (source.similarity * 100).toFixed(1) + "% match" : ""}</small></div></div>)}</div>}\n\n          {researchSources.length > 0 && active === "Research" && (
+          {ragSources.length > 0 && active === "AI Chat" && <div className="research-sources"><div className="comparison-header"><div><strong>Document sources</strong><span>Private document chunks used for this answer.</span></div></div>{ragSources.map((source, index) => <div className="source-card" key={source.fileId + "-" + source.chunkIndex}><span>{index + 1}</span><div><strong>{source.fileName}</strong><small>Chunk {source.chunkIndex + 1}{typeof source.similarity === "number" ? " · " + (source.similarity * 100).toFixed(1) + "% match" : ""}</small></div></div>)}</div>}
+
+          {researchSources.length > 0 && active === "Research" && (
             <div className="research-sources">
               <div className="comparison-header"><div><strong>Research sources</strong><span>Live results returned by the configured search provider.</span></div></div>
               {researchSources.map((source, index) => (

@@ -10,7 +10,7 @@ import { AuthPanel } from "./components/AuthPanel";
 import { supabase, supabaseConfigured } from "./lib/supabase";
 
 type NavItem = { label: string; icon: typeof MessageSquare };
-type Message = { role: "user" | "assistant"; content: string };
+type Message = { role: "user" | "assistant"; content: string; id?: string };
 
 const nav: NavItem[] = [
   { label: "AI Chat", icon: MessageSquare },
@@ -27,25 +27,106 @@ function App() {
   const [active, setActive] = useState("AI Chat");
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [apiReady, setApiReady] = useState<boolean | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  const loadWorkspace = async (userId: string) => {
+    if (!supabase) return;
+    const { data: conversation } = await supabase
+      .from("conversations")
+      .select("id,title")
+      .eq("user_id", userId)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!conversation) {
+      setConversationId(null);
+      setMessages([]);
+      return;
+    }
+
+    const { data } = await supabase
+      .from("messages")
+      .select("id,role,content")
+      .eq("conversation_id", conversation.id)
+      .order("created_at", { ascending: true });
+
+    setConversationId(conversation.id);
+    setMessages((data ?? []).filter((m) => m.role === "user" || m.role === "assistant").map((m) => ({
+      id: m.id,
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    })));
+  };
 
   useEffect(() => {
     fetch("/api/health")
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then((data) => setApiReady(Boolean(data.providers?.openai)))
       .catch(() => setApiReady(false));
+
+    if (!supabase) return;
+
+    supabase.auth.getSession().then(({ data }) => {
+      const user = data.session?.user;
+      setUserEmail(user?.email ?? null);
+      if (user) void loadWorkspace(user.id);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      const user = session?.user;
+      setUserEmail(user?.email ?? null);
+      if (user) void loadWorkspace(user.id);
+      else {
+        setConversationId(null);
+        setMessages([]);
+      }
+    });
+
+    return () => listener.subscription.unsubscribe();
   }, []);
 
   const sendMessage = async (text = prompt) => {
     const message = text.trim();
     if (!message || loading) return;
+
     setPrompt("");
     setMessages((items) => [...items, { role: "user", content: message }]);
     setLoading(true);
+
     try {
+      let activeConversationId = conversationId;
+      let userId: string | null = null;
+
+      if (supabase) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        userId = sessionData.session?.user.id ?? null;
+
+        if (userId && !activeConversationId) {
+          const { data: created } = await supabase
+            .from("conversations")
+            .insert({ user_id: userId, title: message.slice(0, 70), model: "auto" })
+            .select("id")
+            .single();
+          activeConversationId = created?.id ?? null;
+          setConversationId(activeConversationId);
+        }
+
+        if (userId && activeConversationId) {
+          await supabase.from("messages").insert({
+            conversation_id: activeConversationId,
+            user_id: userId,
+            role: "user",
+            content: message,
+            model: "auto",
+          });
+        }
+      }
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -53,15 +134,37 @@ function App() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "AI request failed.");
-      setMessages((items) => [...items, { role: "assistant", content: data.output }]);
+
+      const assistant = String(data.output ?? "");
+      setMessages((items) => [...items, { role: "assistant", content: assistant }]);
+
+      if (supabase && activeConversationId) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const userId = sessionData.session?.user.id;
+        if (userId) {
+          await supabase.from("messages").insert({
+            conversation_id: activeConversationId,
+            user_id: userId,
+            role: "assistant",
+            content: assistant,
+            model: data.model ?? "auto",
+          });
+          await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", activeConversationId);
+        }
+      }
     } catch (error) {
-      setMessages((items) => [
-        ...items,
-        { role: "assistant", content: error instanceof Error ? error.message : "Something went wrong." },
-      ]);
+      const errorMessage = error instanceof Error ? error.message : "Something went wrong.";
+      setMessages((items) => [...items, { role: "assistant", content: errorMessage }]);
     } finally {
       setLoading(false);
     }
+  };
+
+  const startNewChat = () => {
+    setActive("AI Chat");
+    setConversationId(null);
+    setMessages([]);
+    setPrompt("");
   };
 
   return (
@@ -72,9 +175,7 @@ function App() {
             <div className="brand-mark"><Sparkles size={18} /></div>
             <div><strong>BEST OF ALL AI</strong><span>AI Command Center</span></div>
           </div>
-          <button className="new-chat" onClick={() => { setActive("AI Chat"); setMessages([]); }}>
-            <Plus size={18} /> New chat
-          </button>
+          <button className="new-chat" onClick={startNewChat}><Plus size={18} /> New chat</button>
           <nav>
             {nav.map(({ label, icon: Icon }) => (
               <button key={label} className={active === label ? "nav-item active" : "nav-item"} onClick={() => setActive(label)}>
@@ -91,9 +192,7 @@ function App() {
 
       <main className="workspace">
         <header className="topbar">
-          <button className="icon-btn" onClick={() => setSidebar(!sidebar)} aria-label="Toggle sidebar">
-            {sidebar ? <X size={19} /> : <Menu size={19} />}
-          </button>
+          <button className="icon-btn" onClick={() => setSidebar(!sidebar)} aria-label="Toggle sidebar">{sidebar ? <X size={19} /> : <Menu size={19} />}</button>
           <div className="model-picker">
             <BrainCircuit size={17} />
             <span>Auto</span>
@@ -115,7 +214,7 @@ function App() {
           ) : (
             <div className="conversation">
               {messages.map((message, index) => (
-                <div className={message.role === "user" ? "message user-message" : "message assistant-message"} key={index}>
+                <div className={message.role === "user" ? "message user-message" : "message assistant-message"} key={message.id ?? index}>
                   <span className="message-label">{message.role === "user" ? "You" : "BEST OF ALL AI"}</span>
                   <div>{message.content}</div>
                 </div>
@@ -146,33 +245,23 @@ function App() {
 
           <div className="composer-wrap">
             <div className="composer">
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void sendMessage(); } }}
-                placeholder="Ask BEST OF ALL AI anything..."
-                rows={3}
-                disabled={loading}
-              />
+              <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void sendMessage(); } }} placeholder="Ask BEST OF ALL AI anything..." rows={3} disabled={loading} />
               <div className="composer-tools">
                 <div className="tool-row">
                   <button className="tool-btn"><Paperclip size={17} /> Attach</button>
                   <button className="tool-btn"><Mic size={17} /> Voice</button>
                   <button className="tool-btn"><Sparkles size={17} /> Tools</button>
                 </div>
-                <button className="send-btn" disabled={!prompt.trim() || loading} onClick={() => void sendMessage()} aria-label="Send">
-                  <Send size={17} />
-                </button>
+                <button className="send-btn" disabled={!prompt.trim() || loading} onClick={() => void sendMessage()} aria-label="Send"><Send size={17} /></button>
               </div>
             </div>
-            <p className="disclaimer">{!supabaseConfigured ? "Connect Supabase to enable accounts and persistent user data. " : userEmail ? `Signed in as ${userEmail}. ` : "Sign in to save your workspace. "}{apiReady === false ? "Connect OPENAI_API_KEY on the server to enable live AI responses." : "AI output can be inaccurate. Verify important information."}</p>
+            <p className="disclaimer">{!supabaseConfigured ? "Connect Supabase to enable accounts and persistent user data. " : userEmail ? `Signed in as ${userEmail}. Conversations are saved to Supabase. ` : "Sign in to save your workspace. "}{apiReady === false ? "Connect OPENAI_API_KEY on the server to enable live AI responses." : "AI output can be inaccurate. Verify important information."}</p>
           </div>
         </section>
       </main>
+      {authOpen && <AuthPanel onClose={() => setAuthOpen(false)} />}
     </div>
   );
 }
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode><App /></StrictMode>
-);
+createRoot(document.getElementById("root")!).render(<StrictMode><App /></StrictMode>);

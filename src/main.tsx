@@ -10,7 +10,7 @@ import { AuthPanel } from "./components/AuthPanel";
 import { supabase, supabaseConfigured } from "./lib/supabase";
 
 type NavItem = { label: string; icon: typeof MessageSquare };
-type Message = { role: "user" | "assistant"; content: string; id?: string };
+type Message = { role: "user" | "assistant"; content: string; id?: string };\ntype Document = { id: string; name: string; mimeType: string; sizeBytes: number; createdAt: string; indexed?: boolean };\ntype RagSource = { fileId: string; fileName: string; chunkIndex: number; similarity?: number };
 
 const nav: NavItem[] = [
   { label: "AI Chat", icon: MessageSquare },
@@ -151,11 +151,11 @@ function formatBytes(bytes: number) { if (!bytes) return "0 B"; const units = ["
       if(supabase&&!activeConversationId){const {data:s}=await supabase.auth.getSession();const uid=s.session?.user.id;if(uid){const {data:created}=await supabase.from("conversations").insert({user_id:uid,title:message.slice(0,70),model:selectedModel}).select("id").single();activeConversationId=created?.id??null;setConversationId(activeConversationId)}}
       if(active==="Research"){const response=await fetch("/api/research",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message})});const d=await response.json();if(!response.ok)throw Error(d.error||"Research request failed.");setResearchSources(d.sources??[]);setMessages(items=>[...items,{role:"assistant",content:String(d.output??"")}]);return}
       const session=supabase?(await supabase.auth.getSession()).data.session:null;if(!session?.access_token){setAuthOpen(true);throw Error("Please sign in before using AI chat.")}
-      const [provider,...modelParts]=selectedModel.split(":");const body:any={messages:[...messages,{role:"user",content:message}],conversationId:activeConversationId};if(selectedModel!=="auto"){body.provider=provider;body.model=modelParts.join(":")}
+      const [provider,...modelParts]=selectedModel.split(":");const body:any={messages:[...messages,{role:"user",content:message}],conversationId:activeConversationId,useRag:true,documentIds:selectedDocumentIds};if(selectedModel!=="auto"){body.provider=provider;body.model=modelParts.join(":")}
       const response=await fetch("/api/ai/stream",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token},body:JSON.stringify(body)});if(!response.ok||!response.body){const d=await response.json().catch(()=>({}));throw Error(d.error||"AI streaming request failed.")}
       const reader=response.body.getReader(),decoder=new TextDecoder();let buffer="",assistantText="",assistantIndex=-1;
       const addDelta=(delta:string)=>{assistantText+=delta;setMessages(items=>{const next=[...items];if(assistantIndex<0){assistantIndex=next.length;next.push({role:"assistant",content:assistantText})}else next[assistantIndex]={...next[assistantIndex],content:assistantText};return next})};
-      while(true){const x=await reader.read();if(x.done)break;buffer+=decoder.decode(x.value,{stream:true});const events=buffer.split(/\n\n/);buffer=events.pop()||"";for(const event of events){const line=event.split(/\r?\n/).find(x=>x.startsWith("data:"));if(!line)continue;const d=JSON.parse(line.slice(5).trim());if(d.type==="delta"&&d.text)addDelta(d.text);if(d.type==="error")throw Error(d.error||"AI streaming failed.")}}
+      while(true){const x=await reader.read();if(x.done)break;buffer+=decoder.decode(x.value,{stream:true});const events=buffer.split(/\n\n/);buffer=events.pop()||"";for(const event of events){const line=event.split(/\r?\n/).find(x=>x.startsWith("data:"));if(!line)continue;const d=JSON.parse(line.slice(5).trim());if(d.type==="delta"&&d.text)addDelta(d.text);if(d.type==="sources")setRagSources(d.sources??[]);if(d.type==="error")throw Error(d.error||"AI streaming failed.")}}
       if(!assistantText)throw Error("AI returned an empty response.");setResearchSources([]);
     }catch(error){setMessages(items=>[...items,{role:"assistant",content:error instanceof Error?error.message:"Something went wrong."}])}finally{setLoading(false)}
   };
@@ -200,7 +200,7 @@ function formatBytes(bytes: number) { if (!bytes) return "0 B"; const units = ["
     }
   };
 
-  const startNewChat = () => {
+  const toggleDocument = (id: string) => setSelectedDocumentIds(items => items.includes(id) ? items.filter(x => x !== id) : [...items, id]);\n\n  const chatWithDocument = (id: string) => { setSelectedDocumentIds([id]); setActive("AI Chat"); setPrompt("Ask a question about this document: "); };\n\n  const startNewChat = () => {
     setActive("AI Chat");
     setResearchSources([]);
     setConversationId(null);
@@ -257,7 +257,7 @@ function formatBytes(bytes: number) { if (!bytes) return "0 B"; const units = ["
             <div className="library-panel">
               <div className="comparison-header"><div><strong>Document Library</strong><span>Your private documents stored in Supabase and available to RAG.</span></div><button className="tool-btn" onClick={() => void loadDocuments()} disabled={libraryLoading}>{libraryLoading ? "Refreshing…" : "Refresh"}</button></div>
               {libraryError && <div className="library-error">{libraryError}</div>}
-              {libraryLoading && documents.length === 0 ? <div className="comparison-empty">Loading your documents…</div> : documents.length === 0 ? <div className="comparison-empty"><FileText size={24} /><p>No documents yet.</p><span>Use Attach below to upload a PDF, DOCX, TXT, or supported text file.</span></div> : <div className="document-list">{documents.map(doc => <div className="document-card" key={doc.id}><div className="quick-icon"><FileText size={18} /></div><div className="document-info"><strong>{doc.name}</strong><small>{formatBytes(doc.sizeBytes)} · {new Date(doc.createdAt).toLocaleDateString()}</small></div><button className="tool-btn" onClick={() => void downloadDocument(doc.id)}>Open</button><button className="icon-btn" onClick={() => void deleteDocument(doc.id)} aria-label={"Delete " + doc.name}><X size={17} /></button></div>)}</div>}
+              {libraryLoading && documents.length === 0 ? <div className="comparison-empty">Loading your documents…</div> : documents.length === 0 ? <div className="comparison-empty"><FileText size={24} /><p>No documents yet.</p><span>Use Attach below to upload a PDF, DOCX, TXT, or supported text file.</span></div> : <div className="document-list">{documents.map(doc => <div className="document-card" key={doc.id}><div className="quick-icon"><FileText size={18} /></div><div className="document-info"><strong>{doc.name}</strong><small>{formatBytes(doc.sizeBytes)} · {new Date(doc.createdAt).toLocaleDateString()} · {doc.indexed ? "Indexed" : "Not indexed"}</small></div><button className="tool-btn" onClick={() => chatWithDocument(doc.id)}>Chat</button><button className="tool-btn" onClick={() => void downloadDocument(doc.id)}>Open</button><button className={selectedDocumentIds.includes(doc.id) ? "tool-btn active" : "tool-btn"} onClick={() => toggleDocument(doc.id)}>{selectedDocumentIds.includes(doc.id) ? "Selected" : "Select"}</button><button className="icon-btn" onClick={() => void deleteDocument(doc.id)} aria-label={"Delete " + doc.name}><X size={17} /></button></div>)}</div>}
             </div>
           ) : (
           <>
@@ -299,7 +299,7 @@ function formatBytes(bytes: number) { if (!bytes) return "0 B"; const units = ["
             </div>
           )}
 
-          {researchSources.length > 0 && active === "Research" && (
+          {ragSources.length > 0 && active === "AI Chat" && <div className="research-sources"><div className="comparison-header"><div><strong>Document sources</strong><span>Private document chunks used for this answer.</span></div></div>{ragSources.map((source, index) => <div className="source-card" key={source.fileId + "-" + source.chunkIndex}><span>{index + 1}</span><div><strong>{source.fileName}</strong><small>Chunk {source.chunkIndex + 1}{typeof source.similarity === "number" ? " · " + (source.similarity * 100).toFixed(1) + "% match" : ""}</small></div></div>)}</div>}\n\n          {researchSources.length > 0 && active === "Research" && (
             <div className="research-sources">
               <div className="comparison-header"><div><strong>Research sources</strong><span>Live results returned by the configured search provider.</span></div></div>
               {researchSources.map((source, index) => (
@@ -342,7 +342,7 @@ function formatBytes(bytes: number) { if (!bytes) return "0 B"; const units = ["
                 <button className="send-btn" disabled={!prompt.trim() || loading} onClick={() => void sendMessage()} aria-label="Send"><Send size={17} /></button>
               </div>
             </div>
-            <p className="disclaimer">{!supabaseConfigured ? "Connect Supabase to enable accounts and persistent user data. " : userEmail ? `Signed in as ${userEmail}. Conversations are saved to Supabase. ` : "Sign in to save your workspace. "}{apiReady === false ? "Configure an AI provider key on the server to enable live AI responses. " : ""}{active === "Research" && researchReady === false ? "Add BRAVE_SEARCH_API_KEY on the server to enable web research. " : ""}AI output can be inaccurate. Verify important information.</p>
+            <p className="disclaimer">{selectedDocumentIds.length > 0 ? `${selectedDocumentIds.length} document${selectedDocumentIds.length === 1 ? "" : "s"} selected for RAG. ` : ""}{!supabaseConfigured ? "Connect Supabase to enable accounts and persistent user data. " : userEmail ? `Signed in as ${userEmail}. Conversations are saved to Supabase. ` : "Sign in to save your workspace. "}{apiReady === false ? "Configure an AI provider key on the server to enable live AI responses. " : ""}{active === "Research" && researchReady === false ? "Add BRAVE_SEARCH_API_KEY on the server to enable web research. " : ""}AI output can be inaccurate. Verify important information.</p>
           </div>
         </section>
       </main>

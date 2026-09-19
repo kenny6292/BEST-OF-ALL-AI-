@@ -308,7 +308,7 @@ function App() {
 
           {selectedDocumentIds.length > 0 && active === "AI Chat" && <div className="library-error">Document chat active: {selectedDocumentIds.length} selected document{selectedDocumentIds.length > 1 ? "s" : ""}. <button className="tool-btn" onClick={() => setSelectedDocumentIds([])}>Clear</button></div>}
 
-          {ragSources.length > 0 && active === "AI Chat" && <div className="research-sources"><div className="comparison-header"><div><strong>Document sources</strong><span>Relevant excerpts used for this answer.</span></div></div>{ragSources.map((source) => <div className="source-card" key={source.id}><span>§</span><div><strong>{source.fileName}</strong><small>Chunk {source.chunkIndex + 1} · {Math.round(source.similarity * 100)}% similarity</small></div></div>)}</div>}
+          {ragSources.length > 0 && active === "AI Chat" && <div className="research-sources"><div className="comparison-header"><div><strong>Document sources</strong><span>Relevant excerpts used for this answer.</span></div></div>{ragSources.map((source) => <div className="source-card" key={source.id}><span>§</span><div><strong>{source.fileName}</strong><small>Chunk {source.chunkIndex + 1} · {Math.round((source.similarity ?? 0) * 100)}% similarity</small></div></div>)}</div>}
 
           {messages.length === 0 && (
             <div className="quick-grid">

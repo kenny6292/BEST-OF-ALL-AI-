@@ -39,7 +39,9 @@ function formatBytes(bytes: number) { if (!bytes) return "0 B"; const units = ["
   const [comparing, setComparing] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);\n  const [documents, setDocuments] = useState<Array<{ id: string; name: string; mimeType: string; sizeBytes: number; createdAt: string }>>([]);\n  const [libraryLoading, setLibraryLoading] = useState(false);\n  const [libraryError, setLibraryError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);\n  const [documents, setDocuments] = useState<Array<{ id: string; name: string; mimeType: string; sizeBytes: number; createdAt: string }>>([]);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [libraryError, setLibraryError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadWorkspace = async (userId: string) => {

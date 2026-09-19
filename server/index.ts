@@ -2,16 +2,12 @@ import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
-import OpenAI from "openai";
+import { getProviderStatus, generateWithProvider } from "./provider-router.js";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const port = Number(process.env.PORT || 8787);
-const client = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
-type ChatBody = {
-  message?: string;
-  model?: string;
-};
+type ChatBody = { message?: string; model?: string };
 
 const sendJson = (res: ServerResponse, status: number, body: unknown) => {
   res.statusCode = status;
@@ -34,19 +30,12 @@ const serveStatic = (req: IncomingMessage, res: ServerResponse) => {
   const distRoot = normalize(join(root, "dist"));
   const safe = candidate === distRoot || candidate.startsWith(distRoot + "/");
   const filePath = safe && existsSync(candidate) && statSync(candidate).isFile() ? candidate : join(distRoot, "index.html");
-
   if (!existsSync(filePath)) return sendJson(res, 404, { error: "Frontend build not found. Run npm run build first." });
 
   const types: Record<string, string> = {
-    ".html": "text/html; charset=utf-8",
-    ".js": "text/javascript; charset=utf-8",
-    ".css": "text/css; charset=utf-8",
-    ".svg": "image/svg+xml",
-    ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".webp": "image/webp",
-    ".ico": "image/x-icon",
+    ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
+    ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".ico": "image/x-icon",
   };
   res.statusCode = 200;
   res.setHeader("Content-Type", types[extname(filePath)] || "application/octet-stream");
@@ -68,8 +57,17 @@ const server = createServer(async (req, res) => {
     return sendJson(res, 200, {
       ok: true,
       service: "best-of-all-ai-api",
-      providers: { openai: Boolean(process.env.OPENAI_API_KEY) },
+      providers: getProviderStatus(),
       timestamp: new Date().toISOString(),
+    });
+  }
+
+  if (url.pathname === "/api/models" && req.method === "GET") {
+    return sendJson(res, 200, {
+      models: Object.entries(getProviderStatus()).map(([provider, configured]) => ({
+        provider,
+        configured,
+      })),
     });
   }
 
@@ -78,22 +76,12 @@ const server = createServer(async (req, res) => {
       const body = await readJson(req);
       const message = body.message?.trim();
       if (!message) return sendJson(res, 400, { error: "Message is required." });
-      if (!client) return sendJson(res, 503, { error: "OpenAI is not configured. Add OPENAI_API_KEY to the server environment." });
 
-      const response = await client.responses.create({
-        model: body.model || process.env.OPENAI_MODEL || "gpt-5.6-luna",
-        input: message,
-      });
-
-      return sendJson(res, 200, {
-        id: response.id,
-        provider: "openai",
-        model: response.model,
-        output: response.output_text,
-      });
+      const result = await generateWithProvider(message, body.model || "auto");
+      return sendJson(res, 200, result);
     } catch (error) {
       const message = error instanceof Error ? error.message : "AI request failed.";
-      return sendJson(res, 500, { error: message });
+      return sendJson(res, 502, { error: message });
     }
   }
 

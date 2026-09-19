@@ -2,12 +2,12 @@ import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getProviderStatus, generateWithProvider } from "./provider-router.js";
+import { getProviderStatus, getModelCatalog, generateWithProvider } from "./provider-router.js";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const port = Number(process.env.PORT || 8787);
 
-type ChatBody = { message?: string; model?: string };
+type ChatBody = { message?: string; model?: string; providers?: string[] };
 
 const sendJson = (res: ServerResponse, status: number, body: unknown) => {
   res.statusCode = status;
@@ -63,12 +63,26 @@ const server = createServer(async (req, res) => {
   }
 
   if (url.pathname === "/api/models" && req.method === "GET") {
-    return sendJson(res, 200, {
-      models: Object.entries(getProviderStatus()).map(([provider, configured]) => ({
-        provider,
-        configured,
-      })),
-    });
+    return sendJson(res, 200, { models: getModelCatalog() });
+  }
+
+  if (url.pathname === "/api/compare" && req.method === "POST") {
+    try {
+      const body = await readJson(req);
+      const message = body.message?.trim();
+      if (!message) return sendJson(res, 400, { error: "Message is required." });
+
+      const requested = (body.providers || []).filter((name): name is keyof typeof import("./provider-router.js").providers => name in import("./provider-router.js").providers);
+      const targets = requested.length ? requested : Object.entries(getProviderStatus()).filter(([, configured]) => configured).map(([name]) => name);
+      const results = await Promise.allSettled(targets.map((provider) => generateWithProvider(message, provider)));
+      return sendJson(res, 200, {
+        results: results.map((result, index) => result.status === "fulfilled"
+          ? result.value
+          : { provider: targets[index], error: result.reason instanceof Error ? result.reason.message : "Provider request failed." }),
+      });
+    } catch (error) {
+      return sendJson(res, 400, { error: error instanceof Error ? error.message : "Comparison failed." });
+    }
   }
 
   if (url.pathname === "/api/chat" && req.method === "POST") {

@@ -1,0 +1,11 @@
+import OpenAI from "openai";
+import {supabase} from "./auth.js";
+const EMBEDDING_MODEL=process.env.OPENAI_EMBEDDING_MODEL||"text-embedding-3-small";
+const EMBEDDING_DIMENSIONS=Number(process.env.OPENAI_EMBEDDING_DIMENSIONS||1536);
+const TOP_K=Math.min(20,Math.max(1,Number(process.env.RAG_TOP_K||6)));
+function fail(message:string,status=503){throw Object.assign(new Error(message),{status})}
+function client(){const key=process.env.OPENAI_API_KEY;if(!key)fail("OPENAI_API_KEY is required for document embeddings.");return new OpenAI({apiKey:key})}
+export function embeddingsConfigured(){return Boolean(process.env.OPENAI_API_KEY)}
+export async function embedTexts(texts:string[]):Promise<number[][]>{if(!texts.length)return[];const c=client(),out:number[][]=[];for(let i=0;i<texts.length;i+=64){const response=await c.embeddings.create({model:EMBEDDING_MODEL,input:texts.slice(i,i+64),dimensions:EMBEDDING_DIMENSIONS});out.push(...[...response.data].sort((a,b)=>a.index-b.index).map(x=>x.embedding))}return out}
+export async function ingestDocument(userId:string,fileId:string,chunks:Array<{index:number;content:string}>){if(!supabase)fail("Supabase persistence is not configured.");if(!embeddingsConfigured())return{status:"embedding_not_configured",chunkCount:chunks.length};const vectors=await embedTexts(chunks.map(x=>x.content));const rows=chunks.map((x,i)=>({file_id:fileId,user_id:userId,chunk_index:x.index,content:x.content,embedding:vectors[i]}));const del=await supabase.from("document_chunks").delete().eq("file_id",fileId).eq("user_id",userId);if(del.error)throw del.error;const ins=await supabase.from("document_chunks").insert(rows);if(ins.error)throw ins.error;return{status:"indexed",chunkCount:chunks.length,embeddingModel:EMBEDDING_MODEL}}
+export async function semanticSearch(userId:string,query:string,topK=TOP_K){if(!supabase)fail("Supabase persistence is not configured.");if(!embeddingsConfigured())return{status:"embedding_not_configured",results:[]};const [vector]=await embedTexts([query]);const {data,error}=await supabase.rpc("match_document_chunks",{query_embedding:vector,match_user_id:userId,match_count:Math.min(20,Math.max(1,topK))});if(error)throw error;return{status:"ok",results:(data||[]).map((x:any)=>({id:x.id,fileId:x.file_id,chunkIndex:x.chunk_index,content:x.content,similarity:x.similarity}))}}

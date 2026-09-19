@@ -131,7 +131,7 @@ function App() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  const loadDocuments = async () => {
+  async function loadDocuments() {
     const session = supabase ? (await supabase.auth.getSession()).data.session : null;
     if (!session?.access_token) { setDocuments([]); return; }
     setLibraryLoading(true); setLibraryError(null);
@@ -142,7 +142,7 @@ function App() {
       setDocuments(data.files ?? []);
     } catch (error) { setLibraryError(error instanceof Error ? error.message : "Could not load your document library."); }
     finally { setLibraryLoading(false); }
-  };
+  }
   const downloadDocument = async (id: string) => {
     const session = supabase ? (await supabase.auth.getSession()).data.session : null;
     if (!session?.access_token) { setAuthOpen(true); return; }

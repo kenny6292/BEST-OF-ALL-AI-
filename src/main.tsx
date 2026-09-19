@@ -30,6 +30,11 @@ function App() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [apiReady, setApiReady] = useState<boolean | null>(null);
+  const [selectedModel, setSelectedModel] = useState("auto");
+  const [modelCatalog, setModelCatalog] = useState<Array<{ provider: string; configured: boolean; model: string; selector: string }>>([]);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [compareResults, setCompareResults] = useState<Array<{ provider?: string; model?: string; output?: string; error?: string }>>([]);
+  const [comparing, setComparing] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
@@ -64,6 +69,11 @@ function App() {
   };
 
   useEffect(() => {
+    fetch("/api/models")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((data) => setModelCatalog(data.models ?? []))
+      .catch(() => setModelCatalog([]));
+
     fetch("/api/health")
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then((data) => setApiReady(Boolean(data.providers?.openai)))
@@ -109,7 +119,7 @@ function App() {
         if (userId && !activeConversationId) {
           const { data: created } = await supabase
             .from("conversations")
-            .insert({ user_id: userId, title: message.slice(0, 70), model: "auto" })
+            .insert({ user_id: userId, title: message.slice(0, 70), model: selectedModel })
             .select("id")
             .single();
           activeConversationId = created?.id ?? null;
@@ -130,7 +140,7 @@ function App() {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, model: selectedModel }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "AI request failed.");
@@ -147,7 +157,7 @@ function App() {
             user_id: userId,
             role: "assistant",
             content: assistant,
-            model: data.model ?? "auto",
+            model: data.model ?? selectedModel,
           });
           await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", activeConversationId);
         }
@@ -157,6 +167,28 @@ function App() {
       setMessages((items) => [...items, { role: "assistant", content: errorMessage }]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const compareModels = async () => {
+    const message = prompt.trim();
+    if (!message || comparing) return;
+    setComparing(true);
+    setCompareOpen(true);
+    setCompareResults([]);
+    try {
+      const response = await fetch("/api/compare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Comparison failed.");
+      setCompareResults(data.results ?? []);
+    } catch (error) {
+      setCompareResults([{ error: error instanceof Error ? error.message : "Comparison failed." }]);
+    } finally {
+      setComparing(false);
     }
   };
 
@@ -195,8 +227,15 @@ function App() {
           <button className="icon-btn" onClick={() => setSidebar(!sidebar)} aria-label="Toggle sidebar">{sidebar ? <X size={19} /> : <Menu size={19} />}</button>
           <div className="model-picker">
             <BrainCircuit size={17} />
-            <span>Auto</span>
-            <small>{apiReady === true ? "OpenAI connected" : apiReady === false ? "Configure AI key" : "Checking connection..."}</small>
+            <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} aria-label="Select AI model">
+              <option value="auto">Auto</option>
+              {modelCatalog.map((item) => (
+                <option key={item.selector} value={item.selector} disabled={!item.configured}>
+                  {item.provider} · {item.model}{item.configured ? "" : " · not configured"}
+                </option>
+              ))}
+            </select>
+            <small>{apiReady === true ? "AI provider available" : apiReady === false ? "Configure an AI key" : "Checking connection..."}</small>
           </div>
           <div className="top-actions">
             <button className="icon-btn" aria-label="Search"><Search size={18} /></button>
@@ -243,6 +282,23 @@ function App() {
             </div>
           )}
 
+          {compareOpen && (
+            <div className="comparison-panel">
+              <div className="comparison-header">
+                <div><strong>Model comparison</strong><span>Same prompt sent to every configured provider.</span></div>
+                <button className="icon-btn" onClick={() => setCompareOpen(false)} aria-label="Close comparison"><X size={17} /></button>
+              </div>
+              {comparing && <div className="comparison-empty">Comparing configured models…</div>}
+              {!comparing && compareResults.map((result, index) => (
+                <div className="comparison-card" key={result.provider ?? index}>
+                  <div className="comparison-meta"><strong>{result.provider ?? "Provider"}</strong><span>{result.model ?? ""}</span></div>
+                  <p>{result.error ?? result.output}</p>
+                </div>
+              ))}
+              {!comparing && compareResults.length === 0 && <div className="comparison-empty">No configured providers are available.</div>}
+            </div>
+          )}
+
           <div className="composer-wrap">
             <div className="composer">
               <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void sendMessage(); } }} placeholder="Ask BEST OF ALL AI anything..." rows={3} disabled={loading} />
@@ -250,7 +306,7 @@ function App() {
                 <div className="tool-row">
                   <button className="tool-btn"><Paperclip size={17} /> Attach</button>
                   <button className="tool-btn"><Mic size={17} /> Voice</button>
-                  <button className="tool-btn"><Sparkles size={17} /> Tools</button>
+                  <button className="tool-btn" onClick={() => void compareModels()} disabled={!prompt.trim() || comparing}><Sparkles size={17} /> Compare</button>
                 </div>
                 <button className="send-btn" disabled={!prompt.trim() || loading} onClick={() => void sendMessage()} aria-label="Send"><Send size={17} /></button>
               </div>

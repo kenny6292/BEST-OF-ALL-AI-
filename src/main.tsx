@@ -24,13 +24,6 @@ const nav: NavItem[] = [
   { label: "Library", icon: Library },
 ];
 
-async function analyzeCode() { setCodeRunning(true); try { const s=await supabase.auth.getSession(); const t=s.data.session?.access_token; if(!t) throw new Error("Sign in to analyze code."); const r=await fetch("/api/code/analyze",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+t},body:JSON.stringify({code:codeInput,language:"auto"})}); const d=await r.json(); if(!r.ok) throw new Error(d.error||"Code analysis failed."); setCodeAnalysis(d.analysis||""); } catch(e:any){setCodeAnalysis(e?.message||"Code analysis failed.");} finally{setCodeRunning(false);} }
-
-async function createImage() { setImageRunning(true); try { const s=await supabase.auth.getSession(); const t=s.data.session?.access_token; if(!t) throw new Error("Sign in to create images."); const r=await fetch("/api/create/image",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+t},body:JSON.stringify({prompt})}); const d=await r.json(); if(!r.ok) throw new Error(d.error||"Image generation failed."); setCreatedImage(d.image||null); } catch(e:any){ setMessages(m=>[...m,{role:"assistant",content:e?.message||"Image generation failed."}]); } finally { setImageRunning(false); } }
-
-async function runAdvancedResearch() { setResearchRunning(true); try { const s=await supabase.auth.getSession(); const t=s.data.session?.access_token; if(!t){setResearchSources([{title:"Authentication",url:"",snippet:"Sign in to run research."}]);return;} const r=await fetch("/api/research/advanced?q="+encodeURIComponent(prompt),{headers:{Authorization:"Bearer "+t}}); const d=await r.json(); if(!r.ok) throw new Error(d.error||"Research failed."); setResearchSources(d.sources||[]); } catch(e:any){setResearchSources([{title:"Research error",url:"",snippet:e?.message||"Research failed."}]);} finally {setResearchRunning(false);} }
-
-async function runAgents() { setAgentRunning(true); try { const s=await supabase.auth.getSession(); const t=s.data.session?.access_token; if(!t){setAgentResults([{task:"Authentication",error:"Sign in to run agents."}]);return;} const r=await fetch("/api/agents/run",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+t},body:JSON.stringify({tasks:agentTasks})}); const d=await r.json(); if(!r.ok) throw new Error(d.error||"Agent run failed."); setAgentResults(d.results||[]); } catch(e:any){setAgentResults([{task:"Agent run",error:e?.message||"Agent run failed."}]);} finally {setAgentRunning(false);} }
 function formatBytes(bytes: number) { if (!bytes) return "0 B"; const units = ["B", "KB", "MB", "GB", "TB"]; const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1); return (bytes / Math.pow(1024, i)).toFixed(i ? 1 : 0) + " " + units[i]; }
 
 function App() {
@@ -61,6 +54,15 @@ function App() {
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [ragSources, setRagSources] = useState<RagSource[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function analyzeCode() { setCodeRunning(true); try { const s=await supabase.auth.getSession(); const t=s.data.session?.access_token; if(!t) throw new Error("Sign in to analyze code."); const r=await fetch("/api/code/analyze",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+t},body:JSON.stringify({code:codeInput,language:"auto"})}); const d=await r.json(); if(!r.ok) throw new Error(d.error||"Code analysis failed."); setCodeAnalysis(d.analysis||""); } catch(e:any){setCodeAnalysis(e?.message||"Code analysis failed.");} finally{setCodeRunning(false);} }
+  
+  async function createImage() { setImageRunning(true); try { const s=await supabase.auth.getSession(); const t=s.data.session?.access_token; if(!t) throw new Error("Sign in to create images."); const r=await fetch("/api/create/image",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+t},body:JSON.stringify({prompt})}); const d=await r.json(); if(!r.ok) throw new Error(d.error||"Image generation failed."); setCreatedImage(d.image||null); } catch(e:any){ setMessages(m=>[...m,{role:"assistant",content:e?.message||"Image generation failed."}]); } finally { setImageRunning(false); } }
+  
+  async function runAdvancedResearch() { setResearchRunning(true); try { const s=await supabase.auth.getSession(); const t=s.data.session?.access_token; if(!t){setResearchSources([{title:"Authentication",url:"",snippet:"Sign in to run research."}]);return;} const r=await fetch("/api/research/advanced?q="+encodeURIComponent(prompt),{headers:{Authorization:"Bearer "+t}}); const d=await r.json(); if(!r.ok) throw new Error(d.error||"Research failed."); setResearchSources(d.sources||[]); } catch(e:any){setResearchSources([{title:"Research error",url:"",snippet:e?.message||"Research failed."}]);} finally {setResearchRunning(false);} }
+  
+  async function runAgents() { setAgentRunning(true); try { const s=await supabase.auth.getSession(); const t=s.data.session?.access_token; if(!t){setAgentResults([{task:"Authentication",error:"Sign in to run agents."}]);return;} const r=await fetch("/api/agents/run",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+t},body:JSON.stringify({tasks:agentTasks})}); const d=await r.json(); if(!r.ok) throw new Error(d.error||"Agent run failed."); setAgentResults(d.results||[]); } catch(e:any){setAgentResults([{task:"Agent run",error:e?.message||"Agent run failed."}]);} finally {setAgentRunning(false);} }
+  
 
   const loadWorkspace = async (userId: string) => {
     if (!supabase) return;

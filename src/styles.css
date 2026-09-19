@@ -111,3 +111,12 @@ textarea::placeholder { color: #626a78; }
 
 .file-input { display:none; }
 .tool-btn:disabled { opacity:.45; cursor:not-allowed; }
+
+.research-sources { width: min(100%, 920px); margin: 0 auto 18px; border: 1px solid #20252e; border-radius: 18px; padding: 16px; background: rgba(255,255,255,.025); }
+.source-card { display:flex; gap:12px; align-items:flex-start; padding:13px 0; border-top:1px solid rgba(255,255,255,.08); color:inherit; text-decoration:none; }
+.source-card > span { width:24px; height:24px; border:1px solid #303744; border-radius:7px; display:grid; place-items:center; color:#aeb6ff; font-size:11px; flex:0 0 auto; }
+.source-card strong, .source-card small { display:block; }
+.source-card strong { font-size:13px; }
+.source-card small { color:#6f7786; font-size:10px; margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:680px; }
+.source-card p { color:#858e9e; font-size:11px; line-height:1.5; margin:6px 0 0; }
+.source-card:hover strong { text-decoration:underline; }

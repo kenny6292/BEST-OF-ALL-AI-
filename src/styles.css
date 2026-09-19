@@ -97,3 +97,14 @@ textarea::placeholder { color: #626a78; }
 .auth-submit:disabled { opacity: .4; cursor: not-allowed; }
 .auth-message { color: #9da6b5; font-size: 11px; line-height: 1.5; }
 .auth-switch { border: 0; background: transparent; color: #aeb6ff; font-size: 11px; padding: 6px 0; }
+
+
+.model-picker select { background: transparent; color: inherit; border: 0; outline: 0; font: inherit; font-weight: 600; min-width: 125px; }
+.comparison-panel { width: min(100%, 920px); margin: 0 auto 18px; border: 1px solid var(--border, rgba(255,255,255,.1)); border-radius: 18px; padding: 16px; background: rgba(255,255,255,.03); }
+.comparison-header { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:12px; }
+.comparison-header div { display:flex; flex-direction:column; gap:4px; }
+.comparison-header span, .comparison-meta span { opacity:.6; font-size:12px; }
+.comparison-card { border-top:1px solid var(--border, rgba(255,255,255,.08)); padding:14px 0; }
+.comparison-meta { display:flex; justify-content:space-between; gap:12px; margin-bottom:8px; }
+.comparison-card p { margin:0; white-space:pre-wrap; line-height:1.55; }
+.comparison-empty { opacity:.65; padding:18px 0; text-align:center; }

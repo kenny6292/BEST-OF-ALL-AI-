@@ -1,0 +1,106 @@
+import { createServer, IncomingMessage, ServerResponse } from "node:http";
+import { createReadStream, existsSync, statSync } from "node:fs";
+import { extname, join, normalize } from "node:path";
+import { fileURLToPath } from "node:url";
+import OpenAI from "openai";
+
+const root = fileURLToPath(new URL("..", import.meta.url));
+const port = Number(process.env.PORT || 8787);
+const client = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+
+type ChatBody = {
+  message?: string;
+  model?: string;
+};
+
+const sendJson = (res: ServerResponse, status: number, body: unknown) => {
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  res.end(JSON.stringify(body));
+};
+
+const readJson = async (req: IncomingMessage): Promise<ChatBody> => {
+  let raw = "";
+  for await (const chunk of req) raw += chunk;
+  if (!raw) return {};
+  return JSON.parse(raw) as ChatBody;
+};
+
+const serveStatic = (req: IncomingMessage, res: ServerResponse) => {
+  const requested = new URL(req.url || "/", "http://localhost").pathname;
+  const relative = requested === "/" ? "index.html" : requested.replace(/^\/+/, "");
+  const candidate = normalize(join(root, "dist", relative));
+  const distRoot = normalize(join(root, "dist"));
+  const safe = candidate === distRoot || candidate.startsWith(distRoot + "/");
+  const filePath = safe && existsSync(candidate) && statSync(candidate).isFile() ? candidate : join(distRoot, "index.html");
+
+  if (!existsSync(filePath)) return sendJson(res, 404, { error: "Frontend build not found. Run npm run build first." });
+
+  const types: Record<string, string> = {
+    ".html": "text/html; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".ico": "image/x-icon",
+  };
+  res.statusCode = 200;
+  res.setHeader("Content-Type", types[extname(filePath)] || "application/octet-stream");
+  createReadStream(filePath).pipe(res);
+};
+
+const server = createServer(async (req, res) => {
+  const url = new URL(req.url || "/", "http://localhost");
+
+  if (req.method === "OPTIONS") {
+    res.statusCode = 204;
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    return res.end();
+  }
+
+  if (url.pathname === "/api/health") {
+    return sendJson(res, 200, {
+      ok: true,
+      service: "best-of-all-ai-api",
+      providers: { openai: Boolean(process.env.OPENAI_API_KEY) },
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  if (url.pathname === "/api/chat" && req.method === "POST") {
+    try {
+      const body = await readJson(req);
+      const message = body.message?.trim();
+      if (!message) return sendJson(res, 400, { error: "Message is required." });
+      if (!client) return sendJson(res, 503, { error: "OpenAI is not configured. Add OPENAI_API_KEY to the server environment." });
+
+      const response = await client.responses.create({
+        model: body.model || process.env.OPENAI_MODEL || "gpt-5.6-luna",
+        input: message,
+      });
+
+      return sendJson(res, 200, {
+        id: response.id,
+        provider: "openai",
+        model: response.model,
+        output: response.output_text,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "AI request failed.";
+      return sendJson(res, 500, { error: message });
+    }
+  }
+
+  if (req.method === "GET") return serveStatic(req, res);
+  return sendJson(res, 405, { error: "Method not allowed." });
+});
+
+server.listen(port, () => {
+  console.log(`BEST OF ALL AI API listening on http://localhost:${port}`);
+});

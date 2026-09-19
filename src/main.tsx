@@ -338,7 +338,7 @@ function App() {
               <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void sendMessage(); } }} placeholder="Ask BEST OF ALL AI anything..." rows={3} disabled={loading} />
               <div className="composer-tools">
                 <div className="tool-row">
-                  <input ref={fileInputRef} className="file-input" type="file" accept=".txt,.md,.csv,.json,.xml,.js,.ts,.tsx,.jsx,.css,.html,.log,text/*,application/json" onChange={handleFileUpload} />
+                  <input ref={fileInputRef} className="file-input" type="file" accept=".pdf,.docx,.txt,.md,.csv,.json,.xml,.js,.ts,.tsx,.jsx,.css,.html,.log,text/*,application/json,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFileUpload} />
                   <button className="tool-btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}><Paperclip size={17} /> {uploading ? "Uploading…" : "Attach"}</button>
                   <button className="tool-btn"><Mic size={17} /> Voice</button>
                   <button className="tool-btn" onClick={() => void compareModels()} disabled={!prompt.trim() || comparing}><Sparkles size={17} /> Compare</button>

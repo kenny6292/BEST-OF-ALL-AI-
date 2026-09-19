@@ -10,7 +10,9 @@ import { AuthPanel } from "./components/AuthPanel";
 import { supabase, supabaseConfigured } from "./lib/supabase";
 
 type NavItem = { label: string; icon: typeof MessageSquare };
-type Message = { role: "user" | "assistant"; content: string; id?: string };\ntype RagSource = { id: string; fileId: string; fileName: string; chunkIndex: number; similarity: number };\ntype Document = { id: string; name: string; mimeType: string; sizeBytes: number; createdAt: string; indexed?: boolean; indexingStatus?: string };\ntype RagSource = { id?: string; fileId: string; fileName: string; chunkIndex: number; similarity?: number };
+type Message = { role: "user" | "assistant"; content: string; id?: string };
+type RagSource = { id?: string; fileId: string; fileName: string; chunkIndex: number; similarity?: number };
+type Document = { id: string; name: string; mimeType: string; sizeBytes: number; createdAt: string; indexed?: boolean; indexingStatus?: string };
 
 const nav: NavItem[] = [
   { label: "AI Chat", icon: MessageSquare },

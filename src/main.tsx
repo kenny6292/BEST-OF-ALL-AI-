@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useState } from "react";
+import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Bot, BrainCircuit, Code2, FileText, FolderKanban, Image, Library, Menu,
@@ -37,6 +37,8 @@ function App() {
   const [comparing, setComparing] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadWorkspace = async (userId: string) => {
     if (!supabase) return;
@@ -132,7 +134,7 @@ function App() {
             user_id: userId,
             role: "user",
             content: message,
-            model: "auto",
+            model: selectedModel,
           });
         }
       }
@@ -167,6 +169,72 @@ function App() {
       setMessages((items) => [...items, { role: "assistant", content: errorMessage }]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    if (!supabase) {
+      setAuthOpen(true);
+      return;
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user.id;
+    if (!userId) {
+      setAuthOpen(true);
+      return;
+    }
+
+    if (file.size > 6 * 1024 * 1024) {
+      setMessages((items) => [...items, { role: "assistant", content: "This upload is larger than 6 MB. For larger files, resumable uploads should be used." }]);
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const path = `${userId}/${crypto.randomUUID()}-${safeName}`;
+      const { error: uploadError } = await supabase.storage.from("ai-files").upload(path, file, {
+        contentType: file.type || "application/octet-stream",
+        upsert: false,
+      });
+      if (uploadError) throw uploadError;
+
+      const { error: metadataError } = await supabase.from("files").insert({
+        user_id: userId,
+        name: file.name,
+        storage_path: path,
+        mime_type: file.type || "application/octet-stream",
+        size_bytes: file.size,
+      });
+      if (metadataError) throw metadataError;
+
+      const textTypes = [
+        "text/", "application/json", "application/xml", "application/javascript",
+        "application/x-javascript", "application/csv"
+      ];
+      const isText = textTypes.some((type) => file.type.startsWith(type)) ||
+        /\.(txt|md|csv|json|xml|js|ts|tsx|jsx|css|html|log)$/i.test(file.name);
+
+      if (!isText) {
+        setMessages((items) => [...items, {
+          role: "assistant",
+          content: `Uploaded “${file.name}” successfully. This first document-analysis release can analyze text-based files directly; PDF/DOCX extraction will be added in the next document-processing layer.`
+        }]);
+        return;
+      }
+
+      const content = await file.text();
+      const clipped = content.slice(0, 50000);
+      await sendMessage(`Analyze the uploaded file “${file.name}”.\n\nFile contents:\n\n${clipped}${content.length > 50000 ? "\n\n[Content truncated at 50,000 characters.]" : ""}`);
+    } catch (error) {
+      setMessages((items) => [...items, { role: "assistant", content: error instanceof Error ? error.message : "File upload failed." }]);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -304,7 +372,8 @@ function App() {
               <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void sendMessage(); } }} placeholder="Ask BEST OF ALL AI anything..." rows={3} disabled={loading} />
               <div className="composer-tools">
                 <div className="tool-row">
-                  <button className="tool-btn"><Paperclip size={17} /> Attach</button>
+                  <input ref={fileInputRef} className="file-input" type="file" accept=".txt,.md,.csv,.json,.xml,.js,.ts,.tsx,.jsx,.css,.html,.log,text/*,application/json" onChange={handleFileUpload} />
+                  <button className="tool-btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}><Paperclip size={17} /> {uploading ? "Uploading…" : "Attach"}</button>
                   <button className="tool-btn"><Mic size={17} /> Voice</button>
                   <button className="tool-btn" onClick={() => void compareModels()} disabled={!prompt.trim() || comparing}><Sparkles size={17} /> Compare</button>
                 </div>

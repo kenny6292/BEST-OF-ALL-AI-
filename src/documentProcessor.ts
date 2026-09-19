@@ -1,6 +1,3 @@
-// pdf-parse v1.1.1 ships without TypeScript declarations.
-// The runtime API is stable and is intentionally isolated behind this typed boundary.
-// @ts-expect-error pdf-parse has no bundled declaration file.
 import pdfParse from "pdf-parse";
 import mammoth from "mammoth";
 

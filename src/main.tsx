@@ -22,13 +22,13 @@ const nav: NavItem[] = [
   { label: "Library", icon: Library },
 ];
 
-function formatBytes(bytes: number) { if (!bytes) return "0 B"; const units = ["B", "KB", "MB", "GB", "TB"]; const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1); return (bytes / Math.pow(1024, i)).toFixed(i ? 1 : 0) + " " + units[i]; }\n\nfunction App() {
+async function runAgents() { setAgentRunning(true); try { const s=await supabase.auth.getSession(); const t=s.data.session?.access_token; if(!t){setAgentResults([{task:"Authentication",error:"Sign in to run agents."}]);return;} const r=await fetch("/api/agents/run",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+t},body:JSON.stringify({tasks:agentTasks})}); const d=await r.json(); if(!r.ok) throw new Error(d.error||"Agent run failed."); setAgentResults(d.results||[]); } catch(e:any){setAgentResults([{task:"Agent run",error:e?.message||"Agent run failed."}]);} finally {setAgentRunning(false);} }\nfunction formatBytes(bytes: number) { if (!bytes) return "0 B"; const units = ["B", "KB", "MB", "GB", "TB"]; const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1); return (bytes / Math.pow(1024, i)).toFixed(i ? 1 : 0) + " " + units[i]; }\n\nfunction App() {
   const [sidebar, setSidebar] = useState(true);
   const [active, setActive] = useState("AI Chat");
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false); const [agentTasks,setAgentTasks]=useState<string[]>(["Research and summarize the key considerations for my task."]); const [agentResults,setAgentResults]=useState<any[]>([]); const [agentRunning,setAgentRunning]=useState(false);
   const [apiReady, setApiReady] = useState<boolean | null>(null);
   const [researchReady, setResearchReady] = useState<boolean | null>(null);
   const [researchSources, setResearchSources] = useState<Array<{ title: string; url: string; snippet: string }>>([]);
@@ -253,7 +253,7 @@ function formatBytes(bytes: number) { if (!bytes) return "0 B"; const units = ["
         </header>
 
         <section className="content">
-          {active === "Library" ? (
+          {active === "Agents" ? (<div className="agent-panel"><div className="comparison-header"><div><strong>AI Agents</strong><span>Run multiple AI tasks in parallel.</span></div><button className="tool-btn" onClick={()=>void runAgents()} disabled={agentRunning}>{agentRunning?"Running…":"Run tasks"}</button></div>{agentTasks.map((task,index)=><div className="agent-task" key={index}><input value={task} onChange={e=>setAgentTasks(agentTasks.map((x,i)=>i===index?e.target.value:x))}/></div>)}<button className="tool-btn" onClick={()=>setAgentTasks([...agentTasks,"New task"])}>+ Add task</button>{agentResults.map((x,i)=><div className="source-card" key={i}><span>{i+1}</span><div><strong>{x.task}</strong><p>{x.error||x.output}</p></div></div>)}</div>) : active === "Library" ? (
             <div className="library-panel">
               <div className="comparison-header"><div><strong>Document Library</strong><span>Your private documents stored in Supabase and available to RAG.</span></div><button className="tool-btn" onClick={() => void loadDocuments()} disabled={libraryLoading}>{libraryLoading ? "Refreshing…" : "Refresh"}</button></div>
               {libraryError && <div className="library-error">{libraryError}</div>}

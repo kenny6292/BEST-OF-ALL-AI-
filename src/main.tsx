@@ -6,6 +6,8 @@ import {
   Users, WandSparkles, X
 } from "lucide-react";
 import "./styles.css";
+import { AuthPanel } from "./components/AuthPanel";
+import { supabase, supabaseConfigured } from "./lib/supabase";
 
 type NavItem = { label: string; icon: typeof MessageSquare };
 type Message = { role: "user" | "assistant"; content: string };
@@ -27,6 +29,8 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [apiReady, setApiReady] = useState<boolean | null>(null);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/health")
@@ -97,7 +101,7 @@ function App() {
           </div>
           <div className="top-actions">
             <button className="icon-btn" aria-label="Search"><Search size={18} /></button>
-            <div className="avatar">K</div>
+            <button className="avatar" onClick={() => setAuthOpen(true)} aria-label="Account">{userEmail ? userEmail.slice(0, 1).toUpperCase() : "K"}</button>
           </div>
         </header>
 
@@ -161,7 +165,7 @@ function App() {
                 </button>
               </div>
             </div>
-            <p className="disclaimer">{apiReady === false ? "Connect OPENAI_API_KEY on the server to enable live AI responses." : "AI output can be inaccurate. Verify important information."}</p>
+            <p className="disclaimer">{!supabaseConfigured ? "Connect Supabase to enable accounts and persistent user data. " : userEmail ? `Signed in as ${userEmail}. ` : "Sign in to save your workspace. "}{apiReady === false ? "Connect OPENAI_API_KEY on the server to enable live AI responses." : "AI output can be inaccurate. Verify important information."}</p>
           </div>
         </section>
       </main>

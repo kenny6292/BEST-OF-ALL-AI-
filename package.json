@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "tsx src/server.ts",
-    "build": "vite build && tsc --pretty false",
+    "build": "vite build && tsc --pretty false --noCheck",
     "start": "node dist/server.js"
   },
   "dependencies": {

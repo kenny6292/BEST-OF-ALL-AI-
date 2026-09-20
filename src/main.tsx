@@ -175,10 +175,7 @@ function App() {
       const response=await fetch("/api/ai/stream",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token},body:JSON.stringify(body)});if(!response.ok||!response.body){const d=await response.json().catch(()=>({}));throw Error(d.error||"AI streaming request failed.")}
       const reader=response.body.getReader(),decoder=new TextDecoder();let buffer="",assistantText="",assistantIndex=-1;
       const addDelta=(delta:string)=>{assistantText+=delta;setMessages(items=>{const next=[...items];if(assistantIndex<0){assistantIndex=next.length;next.push({role:"assistant",content:assistantText})}else next[assistantIndex]={...next[assistantIndex],content:assistantText};return next})};
-      while(true){const x=await reader.read();if(x.done)break;buffer+=decoder.decode(x.value,{stream:true});const events=buffer.split(/
-
-/);buffer=events.pop()||"";for(const event of events){const line=event.split(/\r?
-/).find(x=>x.startsWith("data:"));if(!line)continue;const d=JSON.parse(line.slice(5).trim());if(d.type==="delta"&&d.text)addDelta(d.text);if(d.type==="sources")setRagSources(d.sources??[]);if(d.type==="error")throw Error(d.error||"AI streaming failed.")}}
+      while(true){const x=await reader.read();if(x.done)break;buffer+=decoder.decode(x.value,{stream:true});const events=buffer.split(/\r?\n\r?\n/);buffer=events.pop()||"";for(const event of events){const line=event.split(/\r?\n/).find(x=>x.startsWith("data:"));if(!line)continue;const d=JSON.parse(line.slice(5).trim());if(d.type==="delta"&&d.text)addDelta(d.text);if(d.type==="sources")setRagSources(d.sources??[]);if(d.type==="error")throw Error(d.error||"AI streaming failed.")}}
       if(!assistantText)throw Error("AI returned an empty response.");setResearchSources([]);
     }catch(error){setMessages(items=>[...items,{role:"assistant",content:error instanceof Error?error.message:"Something went wrong."}])}finally{setLoading(false)}
   };

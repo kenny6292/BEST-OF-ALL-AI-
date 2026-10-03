@@ -10,9 +10,15 @@ export type Database = {
         Relationships: [];
       };
       conversations: {
-        Row: { id: string; user_id: string; title: string; model: string | null; created_at: string; updated_at: string };
-        Insert: { id?: string; user_id: string; title?: string; model?: string | null; created_at?: string; updated_at?: string };
-        Update: { title?: string; model?: string | null; updated_at?: string };
+        Row: { id: string; user_id: string; title: string; model: string | null; project_id: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; user_id: string; title?: string; model?: string | null; project_id?: string | null; created_at?: string; updated_at?: string };
+        Update: { title?: string; model?: string | null; project_id?: string | null; updated_at?: string };
+        Relationships: [];
+      };
+      projects: {
+        Row: { id: string; user_id: string; name: string; description: string; created_at: string; updated_at: string };
+        Insert: { id?: string; user_id: string; name: string; description?: string; created_at?: string; updated_at?: string };
+        Update: { name?: string; description?: string; updated_at?: string };
         Relationships: [];
       };
       messages: {

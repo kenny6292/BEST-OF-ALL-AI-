@@ -2,8 +2,8 @@ import { StrictMode, useEffect, useRef, useState, type ChangeEvent } from "react
 import { createRoot } from "react-dom/client";
 import {
   Bot, BrainCircuit, Code2, FileText, FolderKanban, Image, Library, Menu,
-  MessageSquare, Mic, Paperclip, Plus, Search, Send, Settings, Sparkles,
-  Users, WandSparkles, X
+  MessageSquare, Paperclip, Plus, Search, Send, Sparkles,
+  WandSparkles, X
 } from "lucide-react";
 import "./styles.css";
 import { AuthPanel } from "./components/AuthPanel";
@@ -13,6 +13,7 @@ type NavItem = { label: string; icon: typeof MessageSquare };
 type Message = { role: "user" | "assistant"; content: string; id?: string };
 type RagSource = { id?: string; fileId: string; fileName: string; chunkIndex: number; similarity?: number };
 type Document = { id: string; name: string; mimeType: string; sizeBytes: number; createdAt: string; indexed?: boolean; indexingStatus?: string };
+type Project = { id: string; name: string; description: string; created_at: string; updated_at: string };
 
 const nav: NavItem[] = [
   { label: "AI Chat", icon: MessageSquare },
@@ -52,6 +53,12 @@ function App() {
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [libraryError, setLibraryError] = useState<string | null>(null);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [projectError, setProjectError] = useState<string | null>(null);
+  const [projectName, setProjectName] = useState("");
+  const [projectDescription, setProjectDescription] = useState("");
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [ragSources, setRagSources] = useState<RagSource[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -115,13 +122,13 @@ function App() {
     supabase.auth.getSession().then(({ data }) => {
       const user = data.session?.user;
       setUserEmail(user?.email ?? null);
-      if (user) { void loadWorkspace(user.id); void loadDocuments(); }
+      if (user) { void loadWorkspace(user.id); void loadDocuments(); void loadProjects(); }
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       const user = session?.user;
       setUserEmail(user?.email ?? null);
-      if (user) void loadWorkspace(user.id);
+      if (user) { void loadWorkspace(user.id); void loadProjects(); }
       else {
         setConversationId(null);
         setMessages([]);
@@ -130,6 +137,46 @@ function App() {
 
     return () => listener.subscription.unsubscribe();
   }, []);
+
+  async function loadProjects() {
+    const session = supabase ? (await supabase.auth.getSession()).data.session : null;
+    if (!session?.user || !supabase) { setProjects([]); return; }
+    setProjectsLoading(true); setProjectError(null);
+    try {
+      const { data, error } = await supabase.from("projects").select("id,name,description,created_at,updated_at").order("updated_at", { ascending: false });
+      if (error) throw error;
+      setProjects((data ?? []) as Project[]);
+    } catch (error) { setProjectError(error instanceof Error ? error.message : "Could not load projects."); }
+    finally { setProjectsLoading(false); }
+  }
+
+  async function createProject() {
+    const name = projectName.trim();
+    if (!name || !supabase) return;
+    const session = (await supabase.auth.getSession()).data.session;
+    if (!session?.user) { setAuthOpen(true); return; }
+    setProjectsLoading(true); setProjectError(null);
+    try {
+      const { data, error } = await supabase.from("projects").insert({
+        user_id: session.user.id,
+        name: name.slice(0, 120),
+        description: projectDescription.trim().slice(0, 500)
+      }).select("id,name,description,created_at,updated_at").single();
+      if (error) throw error;
+      if (data) setProjects(items => [data as Project, ...items]);
+      setProjectName(""); setProjectDescription("");
+    } catch (error) { setProjectError(error instanceof Error ? error.message : "Could not create project."); }
+    finally { setProjectsLoading(false); }
+  }
+
+  async function deleteProject(id: string) {
+    if (!supabase) return;
+    if (!window.confirm("Delete this project? Conversations are not deleted.")) return;
+    const { error } = await supabase.from("projects").delete().eq("id", id);
+    if (error) { setProjectError(error.message); return; }
+    setProjects(items => items.filter(item => item.id !== id));
+    if (activeProjectId === id) setActiveProjectId(null);
+  }
 
   async function loadDocuments() {
     const session = supabase ? (await supabase.auth.getSession()).data.session : null;
@@ -168,10 +215,18 @@ function App() {
     setPrompt(""); setMessages((items) => [...items, { role: "user", content: message }]); setLoading(true);
     try {
       let activeConversationId=conversationId;
-      if(supabase&&!activeConversationId){const {data:s}=await supabase.auth.getSession();const uid=s.session?.user.id;if(uid){const {data:created}=await supabase.from("conversations").insert({user_id:uid,title:message.slice(0,70),model:selectedModel}).select("id").single();activeConversationId=created?.id??null;setConversationId(activeConversationId)}}
-      if(active==="Research"){const response=await fetch("/api/research",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message})});const d=await response.json();if(!response.ok)throw Error(d.error||"Research request failed.");setResearchSources(d.sources??[]);setMessages(items=>[...items,{role:"assistant",content:String(d.output??"")}]);return}
+      if(supabase&&!activeConversationId){const {data:s}=await supabase.auth.getSession();const uid=s.session?.user.id;if(uid){const {data:created}=await supabase.from("conversations").insert({user_id:uid,title:message.slice(0,70),model:selectedModel,project_id:activeProjectId}).select("id").single();activeConversationId=created?.id??null;setConversationId(activeConversationId)}}
+      if(active==="Research"){
+        const session=supabase?(await supabase.auth.getSession()).data.session:null;
+        if(!session?.access_token){setAuthOpen(true);throw Error("Please sign in before using research.")}
+        const response=await fetch("/api/research/advanced?q="+encodeURIComponent(message),{headers:{Authorization:"Bearer "+session.access_token}});
+        const d=await response.json();
+        if(!response.ok)throw Error(d.error||"Research request failed.");
+        setResearchSources(d.sources??[]);
+        setMessages(items=>[...items,{role:"assistant",content:d.sources?.length ? "Research completed. Review the live sources below." : "Research returned no sources."}]);
+        return}
       const session=supabase?(await supabase.auth.getSession()).data.session:null;if(!session?.access_token){setAuthOpen(true);throw Error("Please sign in before using AI chat.")}
-      const [provider,...modelParts]=selectedModel.split(":");const body:any={messages:[...messages,{role:"user",content:message}],conversationId:activeConversationId,useRag:true,documentIds:selectedDocumentIds};if(selectedModel!=="auto"){body.provider=provider;body.model=modelParts.join(":")}
+      const [provider,...modelParts]=selectedModel.split(":");const body:any={messages:[...messages,{role:"user",content:message}],conversationId:activeConversationId,useRag:true,documentIds:selectedDocumentIds,projectId:activeProjectId};if(selectedModel!=="auto"){body.provider=provider;body.model=modelParts.join(":")}
       const response=await fetch("/api/ai/stream",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token},body:JSON.stringify(body)});if(!response.ok||!response.body){const d=await response.json().catch(()=>({}));throw Error(d.error||"AI streaming request failed.")}
       const reader=response.body.getReader(),decoder=new TextDecoder();let buffer="",assistantText="",assistantIndex=-1;
       const addDelta=(delta:string)=>{assistantText+=delta;setMessages(items=>{const next=[...items];if(assistantIndex<0){assistantIndex=next.length;next.push({role:"assistant",content:assistantText})}else next[assistantIndex]={...next[assistantIndex],content:assistantText};return next})};
@@ -205,9 +260,11 @@ function App() {
     setCompareOpen(true);
     setCompareResults([]);
     try {
+      const session = supabase ? (await supabase.auth.getSession()).data.session : null;
+      if (!session?.access_token) { setAuthOpen(true); throw new Error("Please sign in before comparing models."); }
       const response = await fetch("/api/compare", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
         body: JSON.stringify({ message }),
       });
       const data = await response.json();
@@ -249,8 +306,7 @@ function App() {
             ))}
           </nav>
           <div className="sidebar-bottom">
-            <button className="nav-item"><Users size={18} /> Team workspace</button>
-            <button className="nav-item"><Settings size={18} /> Settings</button>
+            <button className="nav-item" onClick={() => setAuthOpen(true)}><MessageSquare size={18} /> Account</button>
           </div>
         </aside>
       )}
@@ -271,7 +327,7 @@ function App() {
             <small>{active === "Research" ? (researchReady === true ? "Web research available" : researchReady === false ? "Configure search API" : "Checking research...") : (apiReady === true ? "AI provider available" : apiReady === false ? "Configure an AI key" : "Checking connection...")}</small>
           </div>
           <div className="top-actions">
-            <button className="icon-btn" aria-label="Search"><Search size={18} /></button>
+            
             <button className="avatar" onClick={() => setAuthOpen(true)} aria-label="Account">{userEmail ? userEmail.slice(0, 1).toUpperCase() : "K"}</button>
           </div>
         </header>
@@ -364,9 +420,9 @@ function App() {
               <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void sendMessage(); } }} placeholder="Ask BEST OF ALL AI anything..." rows={3} disabled={loading} />
               <div className="composer-tools">
                 <div className="tool-row">
-                  <input ref={fileInputRef} className="file-input" type="file" accept=".pdf,.docx,.txt,.md,.csv,.json,.xml,.js,.ts,.tsx,.jsx,.css,.html,.log,text/*,application/json,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFileUpload} />
+                  <input ref={fileInputRef} className="file-input" type="file" accept=".pdf,.docx,.txt,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFileUpload} />
                   <button className="tool-btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}><Paperclip size={17} /> {uploading ? "Uploading…" : "Attach"}</button>
-                  <button className="tool-btn"><Mic size={17} /> Voice</button>
+                  
                   <button className="tool-btn" onClick={() => void compareModels()} disabled={!prompt.trim() || comparing}><Sparkles size={17} /> Compare</button><button className="tool-btn" onClick={() => void runAdvancedResearch()} disabled={!prompt.trim() || researchRunning}><Search size={17} /> {researchRunning?"Researching…":"Fast Research"}</button>
                 </div>
                 <button className="send-btn" disabled={!prompt.trim() || loading} onClick={() => void sendMessage()} aria-label="Send"><Send size={17} /></button>

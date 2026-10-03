@@ -1,5 +1,6 @@
 import "dotenv/config";import express,{Request,Response,NextFunction}from "express";import {fileURLToPath} from "node:url";import cors from "cors";import multer from "multer";import OpenAI from "openai";import{chunkDocument,extractDocument}from "./documentProcessor.js";import{requireAuth,supabase,supabaseConfigured}from "./auth.js";import{generate,providerStatus,streamGenerate}from "./aiRouter.js";import{embeddingsConfigured,ingestDocument,semanticSearch}from "./rag.js";const app=express(),port=Number(process.env.PORT||3001),maxUploadBytes=Number(process.env.MAX_DOCUMENT_SIZE_BYTES||25000000);
 const RATE_LIMIT_WINDOW_MS=Number(process.env.API_RATE_LIMIT_WINDOW_MS||60000),RATE_LIMIT_MAX=Number(process.env.API_RATE_LIMIT_MAX||120);
+const allowedOrigins=new Set((process.env.CORS_ORIGINS||"http://localhost:5173,http://localhost:3001").split(",").map(x=>x.trim()).filter(Boolean));
 const rateBuckets=new Map<string,{count:number;reset:number}>();
 setInterval(()=>{const now=Date.now();for(const [key,bucket] of rateBuckets)if(bucket.reset<=now)rateBuckets.delete(key)},Math.max(10000,Math.min(RATE_LIMIT_WINDOW_MS,60000))).unref();
 function rateLimit(req:Request,res:Response,next:NextFunction){

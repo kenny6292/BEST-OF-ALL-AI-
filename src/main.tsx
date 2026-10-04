@@ -1,10 +1,21 @@
 import { StrictMode, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { createRoot } from "react-dom/client";
-import {
-  Bot, BrainCircuit, Code2, FileText, FolderKanban, Image, Library, Menu,
-  MessageSquare, Paperclip, Plus, Search, Send, Sparkles,
-  WandSparkles, X
-} from "lucide-react";
+import Bot from "lucide-react/dist/esm/icons/bot.js";
+import BrainCircuit from "lucide-react/dist/esm/icons/brain-circuit.js";
+import Code2 from "lucide-react/dist/esm/icons/code-2.js";
+import FileText from "lucide-react/dist/esm/icons/file-text.js";
+import FolderKanban from "lucide-react/dist/esm/icons/folder-kanban.js";
+import Image from "lucide-react/dist/esm/icons/image.js";
+import Library from "lucide-react/dist/esm/icons/library.js";
+import Menu from "lucide-react/dist/esm/icons/menu.js";
+import MessageSquare from "lucide-react/dist/esm/icons/message-square.js";
+import Paperclip from "lucide-react/dist/esm/icons/paperclip.js";
+import Plus from "lucide-react/dist/esm/icons/plus.js";
+import Search from "lucide-react/dist/esm/icons/search.js";
+import Send from "lucide-react/dist/esm/icons/send.js";
+import Sparkles from "lucide-react/dist/esm/icons/sparkles.js";
+import WandSparkles from "lucide-react/dist/esm/icons/wand-sparkles.js";
+import X from "lucide-react/dist/esm/icons/x.js";
 import "./styles.css";
 import { AuthPanel } from "./components/AuthPanel";
 import { supabase, supabaseConfigured } from "./lib/supabase";

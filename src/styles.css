@@ -135,3 +135,163 @@ textarea::placeholder { color: #626a78; }
   .project-card { grid-template-columns: auto minmax(0,1fr) auto; }
   .project-card .icon-btn { grid-column: 3; grid-row: 1; }
 }
+
+/* Mobile-first usability pass */
+@media (max-width: 760px) {
+  .app-shell { min-height: 100dvh; }
+  .sidebar {
+    width: min(82vw, 300px);
+    min-height: 100dvh;
+    padding: 16px 12px;
+    overflow-y: auto;
+    transform: translateX(0);
+  }
+  .workspace { width: 100%; }
+  .topbar {
+    height: 58px;
+    padding: 0 12px;
+    gap: 8px;
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    background: rgba(7,9,13,.94);
+    backdrop-filter: blur(12px);
+  }
+  .model-picker { min-width: 0; flex: 1; }
+  .model-picker svg { flex: 0 0 auto; }
+  .model-picker select {
+    min-width: 0;
+    width: 100%;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .model-picker small { display: none; }
+  .top-actions { gap: 6px; }
+  .avatar, .icon-btn { width: 40px; height: 40px; min-width: 40px; }
+  .content {
+    width: calc(100% - 20px);
+    padding: 46px 0 30px;
+  }
+  .hero { margin-bottom: 28px; }
+  h1 { font-size: clamp(34px, 11vw, 48px); line-height: 1.04; margin-top: 15px; }
+  .hero p { font-size: 14px; padding: 0 8px; }
+  .quick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .quick-card {
+    min-height: 126px;
+    padding: 13px;
+    border-radius: 12px;
+  }
+  .quick-icon { margin-bottom: 12px; }
+  .conversation { gap: 10px; margin-bottom: 20px; }
+  .message {
+    max-width: 100%;
+    padding: 13px 14px;
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+  .user-message { margin-left: 12px; }
+  .assistant-message { margin-right: 12px; }
+  .comparison-panel, .research-sources {
+    border-radius: 14px;
+    padding: 13px;
+    overflow: hidden;
+  }
+  .comparison-header { gap: 10px; }
+  .comparison-meta { flex-direction: column; gap: 3px; }
+  .source-card { min-width: 0; }
+  .source-card > div { min-width: 0; }
+  .source-card small {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+  .source-card p { overflow-wrap: anywhere; }
+  .composer-wrap { width: 100%; }
+  .composer {
+    border-radius: 14px;
+    padding: 10px;
+    position: sticky;
+    bottom: 8px;
+    z-index: 7;
+    background: rgba(13,16,22,.97);
+  }
+  textarea {
+    min-height: 74px;
+    font-size: 16px;
+    padding: 7px 6px 14px;
+  }
+  .composer-tools {
+    align-items: center;
+    gap: 6px;
+  }
+  .tool-row {
+    min-width: 0;
+    flex: 1;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .tool-row::-webkit-scrollbar { display: none; }
+  .tool-btn {
+    min-height: 40px;
+    flex: 0 0 auto;
+    padding: 8px 9px;
+    white-space: nowrap;
+  }
+  .send-btn { width: 42px; height: 42px; min-width: 42px; }
+  .disclaimer {
+    font-size: 10px;
+    line-height: 1.45;
+    padding: 0 8px;
+  }
+  .project-create { grid-template-columns: 1fr; }
+  .project-create input { min-height: 44px; font-size: 16px; }
+  .project-card {
+    grid-template-columns: auto minmax(0,1fr);
+    gap: 9px;
+    align-items: start;
+  }
+  .project-card .tool-btn, .project-card .icon-btn {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .document-card {
+    grid-template-columns: auto minmax(0,1fr);
+    gap: 8px;
+  }
+  .document-info { min-width: 0; }
+  .document-info strong, .document-info small {
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 460px) {
+  .content {
+    width: calc(100% - 14px);
+    padding-top: 34px;
+  }
+  .brand { padding-bottom: 10px; }
+  .new-chat, .nav-item { min-height: 44px; }
+  .quick-grid { grid-template-columns: 1fr 1fr; }
+  .quick-card { min-height: 118px; }
+  .quick-card span { font-size: 10px; }
+  .eyebrow { font-size: 11px; }
+  .composer {
+    bottom: 5px;
+    padding: 9px;
+  }
+  .tool-btn { font-size: 11px !important; }
+  .tool-btn svg { flex: 0 0 auto; }
+  .model-picker select { max-width: 125px; font-size: 13px; }
+  .user-message, .assistant-message { margin-left: 0; margin-right: 0; }
+  .auth-overlay { padding: 12px; }
+  .auth-card { padding: 16px; }
+}
+
+@media (max-width: 360px) {
+  .quick-grid { grid-template-columns: 1fr; }
+  .hero h1 { font-size: 34px; }
+  .model-picker svg { display: none; }
+  .model-picker select { max-width: 118px; }
+}
